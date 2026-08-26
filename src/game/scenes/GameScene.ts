@@ -2,12 +2,19 @@ import Phaser from 'phaser';
 import { Cat } from '../entities/Cat';
 import { Human } from '../entities/Human';
 import { recordCatch, type CatchState } from '../systems/catch';
+import { advanceDayNight, createDayNightState, getPhaseLabel, isNightLikePhase, type DayNightState } from '../systems/dayNight';
 import { isCatDetected } from '../systems/detection';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
 import { distance, type Point } from '../utils/movement';
 
 const POSTER_COLLECTION_RADIUS = 34;
 const CAT_RESPAWN: Point = { x: 520, y: 585 };
+const DAY_NIGHT_CONFIG = {
+  dayMs: 60_000,
+  nightMs: 45_000,
+  transitionMs: 3_000,
+};
+const NIGHT_SURVIVAL_SCORE_INTERVAL_MS = 1000;
 
 type PosterSprite = {
   paper: Phaser.GameObjects.Rectangle;
@@ -28,6 +35,10 @@ export class GameScene extends Phaser.Scene {
   private readonly posterSprites = new Map<string, PosterSprite>();
   private humans: Human[] = [];
   private bushes: BushZone[] = [];
+  private dayNight: DayNightState = createDayNightState(DAY_NIGHT_CONFIG);
+  private nightScoreAccumulatorMs = 0;
+  private nightOverlay?: Phaser.GameObjects.Rectangle;
+  private phaseNotice?: Phaser.GameObjects.Text;
   private catchState: CatchState = {
     catches: 0,
     maxCatches: 3,
@@ -48,11 +59,18 @@ export class GameScene extends Phaser.Scene {
     this.posterSprites.clear();
     this.humans = [];
     this.bushes = [];
+    this.dayNight = createDayNightState(DAY_NIGHT_CONFIG);
+    this.nightScoreAccumulatorMs = 0;
+    this.nightOverlay = undefined;
+    this.phaseNotice = undefined;
     this.catchState = { catches: 0, maxCatches: 3, invulnerableUntilMs: 0, ended: false };
 
     this.drawBudvaYard(width, height);
     this.createPosters();
     this.createHumans();
+    this.nightOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0x09142f, 0)
+      .setDepth(40)
+      .setVisible(false);
 
     this.cat = new Cat(this, CAT_RESPAWN);
     this.scoreText = this.add.text(24, 20, '', {
@@ -61,7 +79,7 @@ export class GameScene extends Phaser.Scene {
       color: '#2f241d',
       backgroundColor: 'rgba(255,255,255,0.72)',
       padding: { x: 10, y: 7 },
-    });
+    }).setDepth(200);
     this.updateHud();
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -85,6 +103,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.cat?.update(delta);
+    this.updateDayNight(delta);
 
     for (const human of this.humans) {
       human.update(delta);
@@ -92,6 +111,35 @@ export class GameScene extends Phaser.Scene {
 
     this.collectPostersNearCat();
     this.checkHumanDetection(time);
+  }
+
+  private updateDayNight(deltaMs: number): void {
+    const previousPhase = this.dayNight.phase;
+    this.dayNight = advanceDayNight(this.dayNight, deltaMs);
+    const isNight = isNightLikePhase(this.dayNight.phase);
+
+    for (const human of this.humans) {
+      human.setNightMode(isNight);
+    }
+
+    this.nightOverlay?.setVisible(isNight || this.dayNight.phase === 'toNight');
+    this.nightOverlay?.setAlpha(isNight ? 0.42 : this.dayNight.phase === 'toNight' ? 0.2 : 0);
+
+    if (this.dayNight.phase === 'night') {
+      this.nightScoreAccumulatorMs += deltaMs;
+      while (this.nightScoreAccumulatorMs >= NIGHT_SURVIVAL_SCORE_INTERVAL_MS) {
+        this.nightScoreAccumulatorMs -= NIGHT_SURVIVAL_SCORE_INTERVAL_MS;
+        this.score += 1;
+      }
+    } else {
+      this.nightScoreAccumulatorMs = 0;
+    }
+
+    if (previousPhase !== this.dayNight.phase) {
+      this.showPhaseNotice();
+    }
+
+    this.updateHud();
   }
 
   private collectPostersNearCat(): void {
@@ -161,8 +209,9 @@ export class GameScene extends Phaser.Scene {
       index < this.catchState.maxCatches - this.catchState.catches ? '🐾' : '—'
     )).join(' ');
 
+    const seconds = Math.ceil(this.dayNight.remainingMs / 1000);
     this.scoreText?.setText(
-      `☀ День: 60   Рейтинг: ${this.score}   Объявления: ${this.collectedPosterCount}/${this.posters.length}   Свобода: ${paws}`,
+      `${getPhaseLabel(this.dayNight.phase)}: ${seconds}   Цикл: ${this.dayNight.cycle}   Рейтинг: ${this.score}   Объявления: ${this.collectedPosterCount}/${this.posters.length}   Свобода: ${paws}`,
     );
   }
 
@@ -192,9 +241,38 @@ export class GameScene extends Phaser.Scene {
 
   private createHumans(): void {
     this.humans = [
-      new Human(this, [{ x: 250, y: 180 }, { x: 720, y: 180 }], 80, 115, 70),
-      new Human(this, [{ x: 760, y: 470 }, { x: 260, y: 470 }], 70, 105, 70),
+      new Human(this, [{ x: 250, y: 180 }, { x: 720, y: 180 }], 80, 115, 70, 190),
+      new Human(this, [{ x: 760, y: 470 }, { x: 260, y: 470 }], 70, 105, 70, 175),
     ];
+  }
+
+  private showPhaseNotice(): void {
+    const { width, height } = this.scale;
+    this.phaseNotice?.destroy();
+    const text = this.dayNight.phase === 'night'
+      ? 'Ночь! Люди включили фонарики 🌙'
+      : this.dayNight.phase === 'day'
+        ? 'Рассвело! Срывай объявления ☀'
+        : getPhaseLabel(this.dayNight.phase);
+
+    this.phaseNotice = this.add.text(width / 2, height / 2 - 210, text, {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '30px',
+      color: '#ffffff',
+      backgroundColor: 'rgba(32, 23, 43, 0.82)',
+      padding: { x: 14, y: 8 },
+    }).setOrigin(0.5).setDepth(210);
+
+    this.tweens.add({
+      targets: this.phaseNotice,
+      alpha: 0,
+      y: height / 2 - 245,
+      duration: 1300,
+      onComplete: () => {
+        this.phaseNotice?.destroy();
+        this.phaseNotice = undefined;
+      },
+    });
   }
 
   private showPopup(x: number, y: number, text: string, color: string): void {
@@ -204,7 +282,7 @@ export class GameScene extends Phaser.Scene {
       color,
       backgroundColor: 'rgba(255,255,255,0.84)',
       padding: { x: 6, y: 3 },
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(220);
 
     this.tweens.add({
       targets: popup,
@@ -217,14 +295,15 @@ export class GameScene extends Phaser.Scene {
 
   private showHomeResult(): void {
     const { width, height } = this.scale;
-    this.add.rectangle(width / 2, height / 2, width, height, 0x20172b, 0.72);
-    this.add.rectangle(width / 2, height / 2, 690, 330, 0xfff3dc).setStrokeStyle(5, 0x7c4d2b);
+    const resultDepth = 300;
+    this.add.rectangle(width / 2, height / 2, width, height, 0x20172b, 0.72).setDepth(resultDepth);
+    this.add.rectangle(width / 2, height / 2, 690, 330, 0xfff3dc).setStrokeStyle(5, 0x7c4d2b).setDepth(resultDepth + 1);
     this.add.text(width / 2, height / 2 - 105, 'Чешка вернулась домой', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '38px',
       color: '#4d2c1d',
       align: 'center',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(resultDepth + 2);
     this.add.text(
       width / 2,
       height / 2 - 18,
@@ -236,22 +315,23 @@ export class GameScene extends Phaser.Scene {
         align: 'center',
         lineSpacing: 8,
       },
-    ).setOrigin(0.5);
+    ).setOrigin(0.5).setDepth(resultDepth + 2);
     this.add.text(width / 2, height / 2 + 92, `Рейтинг прогулки: ${this.score}`, {
       fontFamily: 'Arial, sans-serif',
       fontSize: '24px',
       color: '#2e7d32',
       align: 'center',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(resultDepth + 2);
 
     const restartButton = this.add.rectangle(width / 2, height / 2 + 145, 250, 52, 0x79b66a)
       .setStrokeStyle(3, 0x315a2c)
+      .setDepth(resultDepth + 2)
       .setInteractive({ useHandCursor: true });
     this.add.text(width / 2, height / 2 + 145, 'Сбежать снова', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '22px',
       color: '#ffffff',
-    }).setOrigin(0.5);
+    }).setOrigin(0.5).setDepth(resultDepth + 3);
     restartButton.on('pointerdown', () => this.scene.restart());
   }
 

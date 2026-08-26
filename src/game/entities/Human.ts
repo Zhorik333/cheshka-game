@@ -12,19 +12,24 @@ export class Human {
   private readonly view: Phaser.GameObjects.Triangle;
   private readonly label: Phaser.GameObjects.Text;
   private readonly speedPixelsPerSecond: number;
-  private readonly viewDistance: number;
+  private readonly dayViewDistance: number;
+  private readonly nightViewDistance: number;
   private readonly viewAngleDegrees: number;
+  private currentViewDistance: number;
 
   constructor(
     scene: Phaser.Scene,
     path: Point[],
     speedPixelsPerSecond = 90,
-    viewDistance = 105,
+    dayViewDistance = 105,
     viewAngleDegrees = 70,
+    nightViewDistance = dayViewDistance * 1.65,
   ) {
     this.speedPixelsPerSecond = speedPixelsPerSecond;
-    this.viewDistance = viewDistance;
+    this.dayViewDistance = dayViewDistance;
+    this.nightViewDistance = nightViewDistance;
     this.viewAngleDegrees = viewAngleDegrees;
+    this.currentViewDistance = dayViewDistance;
     const start = path[0] ?? { x: 0, y: 0 };
     this.patrol = {
       x: start.x,
@@ -53,12 +58,18 @@ export class Human {
     this.redrawViewCone();
   }
 
+  setNightMode(enabled: boolean): void {
+    this.currentViewDistance = enabled ? this.nightViewDistance : this.dayViewDistance;
+    this.view.setFillStyle(enabled ? 0xffd45c : VIEW_COLOR, enabled ? 0.36 : 0.28);
+    this.redrawViewCone();
+  }
+
   toDetectionHuman(): DetectionHuman {
     return {
       x: this.patrol.x,
       y: this.patrol.y,
       facing: this.patrol.facing ?? { x: 1, y: 0 },
-      viewDistance: this.viewDistance,
+      viewDistance: this.currentViewDistance,
       viewAngleDegrees: this.viewAngleDegrees,
     };
   }
@@ -68,12 +79,12 @@ export class Human {
     const angle = Math.atan2(facing.y, facing.x);
     const halfAngle = Phaser.Math.DegToRad(this.viewAngleDegrees / 2);
     const left = {
-      x: this.patrol.x + Math.cos(angle - halfAngle) * this.viewDistance,
-      y: this.patrol.y + Math.sin(angle - halfAngle) * this.viewDistance,
+      x: this.patrol.x + Math.cos(angle - halfAngle) * this.currentViewDistance,
+      y: this.patrol.y + Math.sin(angle - halfAngle) * this.currentViewDistance,
     };
     const right = {
-      x: this.patrol.x + Math.cos(angle + halfAngle) * this.viewDistance,
-      y: this.patrol.y + Math.sin(angle + halfAngle) * this.viewDistance,
+      x: this.patrol.x + Math.cos(angle + halfAngle) * this.currentViewDistance,
+      y: this.patrol.y + Math.sin(angle + halfAngle) * this.currentViewDistance,
     };
 
     this.view.setTo(0, 0, left.x - this.patrol.x, left.y - this.patrol.y, right.x - this.patrol.x, right.y - this.patrol.y);
