@@ -4,7 +4,9 @@ import { Human } from '../entities/Human';
 import { recordCatch, type CatchState } from '../systems/catch';
 import { advanceDayNight, createDayNightState, getPhaseLabel, isNightLikePhase, type DayNightState } from '../systems/dayNight';
 import { isCatDetected } from '../systems/detection';
+import { getCycleDifficulty } from '../systems/difficulty';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
+import { createPosterStates } from '../systems/posterLayout';
 import { distance, type Point } from '../utils/movement';
 
 const POSTER_COLLECTION_RADIUS = 34;
@@ -136,6 +138,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (previousPhase !== this.dayNight.phase) {
+      if (this.dayNight.phase === 'day') {
+        this.startNewDayCycle();
+      }
       this.showPhaseNotice();
     }
 
@@ -216,15 +221,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createPosters(): void {
-    const posterPositions = [
-      { id: 'poster-wall-left', x: 240, y: 86 },
-      { id: 'poster-wall-center', x: 505, y: 88 },
-      { id: 'poster-house', x: 140, y: 240 },
-      { id: 'poster-cafe', x: 770, y: 255 },
-      { id: 'poster-sea-street', x: 720, y: 455 },
-    ];
+    for (const sprite of this.posterSprites.values()) {
+      sprite.paper.destroy();
+      sprite.glow.destroy();
+      sprite.mark.destroy();
+    }
+    this.posterSprites.clear();
 
-    this.posters = posterPositions.map((poster) => ({ ...poster, collected: false }));
+    const difficulty = getCycleDifficulty(this.dayNight.cycle);
+    this.posters = createPosterStates(difficulty.posterCount);
 
     for (const poster of this.posters) {
       const glow = this.add.circle(poster.x, poster.y, 28, 0xfff1a0, 0.32);
@@ -240,10 +245,40 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createHumans(): void {
-    this.humans = [
-      new Human(this, [{ x: 250, y: 180 }, { x: 720, y: 180 }], 80, 115, 70, 190),
-      new Human(this, [{ x: 760, y: 470 }, { x: 260, y: 470 }], 70, 105, 70, 175),
+    for (const human of this.humans) {
+      human.destroy();
+    }
+
+    const difficulty = getCycleDifficulty(this.dayNight.cycle);
+    const speed = difficulty.humanSpeedMultiplier;
+    const nightView = difficulty.nightViewMultiplier;
+    const humanConfigs = [
+      { path: [{ x: 250, y: 180 }, { x: 720, y: 180 }], speed: 80, dayView: 115, nightView: 190 },
+      { path: [{ x: 760, y: 470 }, { x: 260, y: 470 }], speed: 70, dayView: 105, nightView: 175 },
+      { path: [{ x: 220, y: 585 }, { x: 790, y: 585 }], speed: 78, dayView: 110, nightView: 185 },
+      { path: [{ x: 880, y: 160 }, { x: 880, y: 520 }], speed: 72, dayView: 105, nightView: 180 },
     ];
+
+    this.humans = humanConfigs.slice(0, difficulty.humanCount).map((config) => new Human(
+      this,
+      config.path,
+      config.speed * speed,
+      config.dayView,
+      70,
+      config.nightView * nightView,
+    ));
+
+    const isNight = isNightLikePhase(this.dayNight.phase);
+    for (const human of this.humans) {
+      human.setNightMode(isNight);
+    }
+  }
+
+  private startNewDayCycle(): void {
+    this.collectedPosterCount = 0;
+    this.createPosters();
+    this.createHumans();
+    this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 82, `Новый день: ${this.posters.length} объявлений!`, '#2e7d32');
   }
 
   private showPhaseNotice(): void {

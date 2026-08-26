@@ -64,6 +64,12 @@ export class Human {
     this.redrawViewCone();
   }
 
+  destroy(): void {
+    this.view.destroy();
+    this.body.destroy();
+    this.label.destroy();
+  }
+
   toDetectionHuman(): DetectionHuman {
     return {
       x: this.patrol.x,
