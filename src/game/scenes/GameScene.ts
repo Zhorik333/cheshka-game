@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Cat } from '../entities/Cat';
 import { Human } from '../entities/Human';
+import { loadBestScore, saveBestScoreIfHigher } from '../systems/bestScore';
 import { recordCatch, type CatchState } from '../systems/catch';
 import { advanceDayNight, createDayNightState, getPhaseLabel, isNightLikePhase, type DayNightState } from '../systems/dayNight';
 import { isCatDetected } from '../systems/detection';
@@ -32,6 +33,9 @@ export class GameScene extends Phaser.Scene {
   private cat?: Cat;
   private score = 0;
   private collectedPosterCount = 0;
+  private totalCollectedPosterCount = 0;
+  private survivedNightCount = 0;
+  private bestScore = 0;
   private scoreText?: Phaser.GameObjects.Text;
   private posters: PosterState[] = [];
   private readonly posterSprites = new Map<string, PosterSprite>();
@@ -57,6 +61,9 @@ export class GameScene extends Phaser.Scene {
 
     this.score = 0;
     this.collectedPosterCount = 0;
+    this.totalCollectedPosterCount = 0;
+    this.survivedNightCount = 0;
+    this.bestScore = loadBestScore(window.localStorage);
     this.posters = [];
     this.posterSprites.clear();
     this.humans = [];
@@ -138,6 +145,11 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (previousPhase !== this.dayNight.phase) {
+      if (previousPhase === 'night' && this.dayNight.phase === 'toDay') {
+        this.survivedNightCount += 1;
+        this.score += 50;
+        this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 112, '+50 за ночь!', '#2e7d32');
+      }
       if (this.dayNight.phase === 'day') {
         this.startNewDayCycle();
       }
@@ -161,6 +173,7 @@ export class GameScene extends Phaser.Scene {
     this.posters = result.posters;
     this.score += result.scoreDelta;
     this.collectedPosterCount += result.collectedIds.length;
+    this.totalCollectedPosterCount += result.collectedIds.length;
 
     for (const posterId of result.collectedIds) {
       const sprite = this.posterSprites.get(posterId);
@@ -216,7 +229,7 @@ export class GameScene extends Phaser.Scene {
 
     const seconds = Math.ceil(this.dayNight.remainingMs / 1000);
     this.scoreText?.setText(
-      `${getPhaseLabel(this.dayNight.phase)}: ${seconds}   Цикл: ${this.dayNight.cycle}   Рейтинг: ${this.score}   Объявления: ${this.collectedPosterCount}/${this.posters.length}   Свобода: ${paws}`,
+      `${getPhaseLabel(this.dayNight.phase)}: ${seconds}   Цикл: ${this.dayNight.cycle}   Рейтинг: ${this.score}   Рекорд: ${this.bestScore}   Объявления: ${this.collectedPosterCount}/${this.posters.length}   Свобода: ${paws}`,
     );
   }
 
@@ -330,10 +343,13 @@ export class GameScene extends Phaser.Scene {
 
   private showHomeResult(): void {
     const { width, height } = this.scale;
+    const bestScoreResult = saveBestScoreIfHigher(window.localStorage, this.score);
+    this.bestScore = bestScoreResult.bestScore;
+    const recordText = bestScoreResult.isNewRecord ? 'Новый рекорд! ★' : `Рекорд: ${bestScoreResult.bestScore}`;
     const resultDepth = 300;
     this.add.rectangle(width / 2, height / 2, width, height, 0x20172b, 0.72).setDepth(resultDepth);
-    this.add.rectangle(width / 2, height / 2, 690, 330, 0xfff3dc).setStrokeStyle(5, 0x7c4d2b).setDepth(resultDepth + 1);
-    this.add.text(width / 2, height / 2 - 105, 'Чешка вернулась домой', {
+    this.add.rectangle(width / 2, height / 2, 720, 430, 0xfff3dc).setStrokeStyle(5, 0x7c4d2b).setDepth(resultDepth + 1);
+    this.add.text(width / 2, height / 2 - 155, 'Чешка вернулась домой', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '38px',
       color: '#4d2c1d',
@@ -341,7 +357,7 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(resultDepth + 2);
     this.add.text(
       width / 2,
-      height / 2 - 18,
+      height / 2 - 72,
       'Тебя поймали три раза. Теперь Чешка дома —\nсытая, целая и немного недовольная.\nНо двор всё ещё ждёт её следующий побег.',
       {
         fontFamily: 'Arial, sans-serif',
@@ -351,18 +367,24 @@ export class GameScene extends Phaser.Scene {
         lineSpacing: 8,
       },
     ).setOrigin(0.5).setDepth(resultDepth + 2);
-    this.add.text(width / 2, height / 2 + 92, `Рейтинг прогулки: ${this.score}`, {
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '24px',
-      color: '#2e7d32',
-      align: 'center',
-    }).setOrigin(0.5).setDepth(resultDepth + 2);
+    this.add.text(
+      width / 2,
+      height / 2 + 70,
+      `Рейтинг прогулки: ${this.score}\n${recordText}\nСорвано объявлений: ${this.totalCollectedPosterCount}\nПережито ночей: ${this.survivedNightCount}`,
+      {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '23px',
+        color: '#2e7d32',
+        align: 'center',
+        lineSpacing: 6,
+      },
+    ).setOrigin(0.5).setDepth(resultDepth + 2);
 
-    const restartButton = this.add.rectangle(width / 2, height / 2 + 145, 250, 52, 0x79b66a)
+    const restartButton = this.add.rectangle(width / 2, height / 2 + 170, 250, 52, 0x79b66a)
       .setStrokeStyle(3, 0x315a2c)
       .setDepth(resultDepth + 2)
       .setInteractive({ useHandCursor: true });
-    this.add.text(width / 2, height / 2 + 145, 'Сбежать снова', {
+    this.add.text(width / 2, height / 2 + 170, 'Сбежать снова', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '22px',
       color: '#ffffff',
