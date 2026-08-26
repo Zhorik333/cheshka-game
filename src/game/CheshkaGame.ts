@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GameScene } from './scenes/GameScene';
+import { HowToScene } from './scenes/HowToScene';
 import { MenuScene } from './scenes/MenuScene';
 
 export function startCheshkaGame(parent: string): Phaser.Game {
@@ -13,6 +14,6 @@ export function startCheshkaGame(parent: string): Phaser.Game {
       mode: Phaser.Scale.FIT,
       autoCenter: Phaser.Scale.CENTER_BOTH,
     },
-    scene: [MenuScene, GameScene],
+    scene: [MenuScene, HowToScene, GameScene],
   });
 }
