@@ -28,6 +28,12 @@ export class Cat {
     this.target = { ...target };
   }
 
+  setPosition(position: Point): void {
+    this.target = { ...position };
+    this.body.setPosition(position.x, position.y);
+    this.label.setPosition(position.x, position.y - 31);
+  }
+
   update(deltaMs: number): void {
     const next = moveTowards(this.position, this.target, (this.speedPixelsPerSecond * deltaMs) / 1000);
     this.body.setPosition(next.x, next.y);

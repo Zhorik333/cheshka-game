@@ -1,12 +1,22 @@
 import Phaser from 'phaser';
 import { Cat } from '../entities/Cat';
+import { Human } from '../entities/Human';
+import { recordCatch, type CatchState } from '../systems/catch';
+import { isCatDetected } from '../systems/detection';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
+import { distance, type Point } from '../utils/movement';
 
 const POSTER_COLLECTION_RADIUS = 34;
+const CAT_RESPAWN: Point = { x: 520, y: 585 };
 
 type PosterSprite = {
   paper: Phaser.GameObjects.Rectangle;
   glow: Phaser.GameObjects.Arc;
+  mark: Phaser.GameObjects.Text;
+};
+
+type BushZone = Point & {
+  radius: number;
 };
 
 export class GameScene extends Phaser.Scene {
@@ -15,7 +25,15 @@ export class GameScene extends Phaser.Scene {
   private collectedPosterCount = 0;
   private scoreText?: Phaser.GameObjects.Text;
   private posters: PosterState[] = [];
-  private posterSprites = new Map<string, PosterSprite>();
+  private readonly posterSprites = new Map<string, PosterSprite>();
+  private humans: Human[] = [];
+  private bushes: BushZone[] = [];
+  private catchState: CatchState = {
+    catches: 0,
+    maxCatches: 3,
+    invulnerableUntilMs: 0,
+    ended: false,
+  };
 
   constructor() {
     super('GameScene');
@@ -28,11 +46,15 @@ export class GameScene extends Phaser.Scene {
     this.collectedPosterCount = 0;
     this.posters = [];
     this.posterSprites.clear();
+    this.humans = [];
+    this.bushes = [];
+    this.catchState = { catches: 0, maxCatches: 3, invulnerableUntilMs: 0, ended: false };
 
     this.drawBudvaYard(width, height);
     this.createPosters();
+    this.createHumans();
 
-    this.cat = new Cat(this, { x: width / 2, y: height / 2 });
+    this.cat = new Cat(this, CAT_RESPAWN);
     this.scoreText = this.add.text(24, 20, '', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '20px',
@@ -43,10 +65,12 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      this.cat?.setTarget({ x: pointer.worldX, y: pointer.worldY });
+      if (!this.catchState.ended) {
+        this.cat?.setTarget({ x: pointer.worldX, y: pointer.worldY });
+      }
     });
 
-    this.add.text(width / 2, height - 28, 'Срывай жёлтые объявления: каждое даёт +10 рейтинга ♪', {
+    this.add.text(width / 2, height - 28, 'Срывай объявления и не заходи в красные зоны людей ♪', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '18px',
       color: '#4d2c1d',
@@ -55,9 +79,19 @@ export class GameScene extends Phaser.Scene {
     }).setOrigin(0.5);
   }
 
-  update(_time: number, delta: number): void {
+  update(time: number, delta: number): void {
+    if (this.catchState.ended) {
+      return;
+    }
+
     this.cat?.update(delta);
+
+    for (const human of this.humans) {
+      human.update(delta);
+    }
+
     this.collectPostersNearCat();
+    this.checkHumanDetection(time);
   }
 
   private collectPostersNearCat(): void {
@@ -79,16 +113,56 @@ export class GameScene extends Phaser.Scene {
       const sprite = this.posterSprites.get(posterId);
       sprite?.paper.destroy();
       sprite?.glow.destroy();
+      sprite?.mark.destroy();
       this.posterSprites.delete(posterId);
     }
 
-    this.showScorePopup(this.cat.position.x, this.cat.position.y - 34, `+${result.scoreDelta}`);
+    this.showPopup(this.cat.position.x, this.cat.position.y - 34, `+${result.scoreDelta}`, '#2e7d32');
     this.updateHud();
   }
 
+  private checkHumanDetection(timeMs: number): void {
+    if (!this.cat) {
+      return;
+    }
+
+    const catIsHidden = this.isCatInBush(this.cat.position);
+    const detected = this.humans.some((human) => isCatDetected(human.toDetectionHuman(), this.cat!.position, catIsHidden));
+
+    if (!detected) {
+      return;
+    }
+
+    const previousCatches = this.catchState.catches;
+    this.catchState = recordCatch(this.catchState, timeMs, 2000);
+
+    if (this.catchState.catches === previousCatches) {
+      return;
+    }
+
+    this.score = Math.max(0, this.score - 20);
+    this.updateHud();
+
+    if (this.catchState.ended) {
+      this.showHomeResult();
+      return;
+    }
+
+    this.cat.setPosition(CAT_RESPAWN);
+    this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 45, 'Поймали! Чешка вырвалась 🐾', '#b3261e');
+  }
+
+  private isCatInBush(catPosition: Point): boolean {
+    return this.bushes.some((bush) => distance(bush, catPosition) <= bush.radius);
+  }
+
   private updateHud(): void {
+    const paws = Array.from({ length: this.catchState.maxCatches }, (_value, index) => (
+      index < this.catchState.maxCatches - this.catchState.catches ? '🐾' : '—'
+    )).join(' ');
+
     this.scoreText?.setText(
-      `☀ День: 60   Рейтинг: ${this.score}   Объявления: ${this.collectedPosterCount}/${this.posters.length}   Свобода: 🐾 🐾 🐾`,
+      `☀ День: 60   Рейтинг: ${this.score}   Объявления: ${this.collectedPosterCount}/${this.posters.length}   Свобода: ${paws}`,
     );
   }
 
@@ -106,22 +180,29 @@ export class GameScene extends Phaser.Scene {
     for (const poster of this.posters) {
       const glow = this.add.circle(poster.x, poster.y, 28, 0xfff1a0, 0.32);
       const paper = this.add.rectangle(poster.x, poster.y, 34, 44, 0xffee75).setStrokeStyle(2, 0x7d6824);
-      this.add.text(poster.x, poster.y, '!', {
+      const mark = this.add.text(poster.x, poster.y, '!', {
         fontFamily: 'Arial, sans-serif',
         fontSize: '20px',
         color: '#7d6824',
       }).setOrigin(0.5);
 
-      this.posterSprites.set(poster.id, { paper, glow });
+      this.posterSprites.set(poster.id, { paper, glow, mark });
     }
   }
 
-  private showScorePopup(x: number, y: number, text: string): void {
+  private createHumans(): void {
+    this.humans = [
+      new Human(this, [{ x: 250, y: 180 }, { x: 720, y: 180 }], 80, 115, 70),
+      new Human(this, [{ x: 760, y: 470 }, { x: 260, y: 470 }], 70, 105, 70),
+    ];
+  }
+
+  private showPopup(x: number, y: number, text: string, color: string): void {
     const popup = this.add.text(x, y, text, {
       fontFamily: 'Arial, sans-serif',
       fontSize: '24px',
-      color: '#2e7d32',
-      backgroundColor: 'rgba(255,255,255,0.8)',
+      color,
+      backgroundColor: 'rgba(255,255,255,0.84)',
       padding: { x: 6, y: 3 },
     }).setOrigin(0.5);
 
@@ -129,9 +210,49 @@ export class GameScene extends Phaser.Scene {
       targets: popup,
       y: y - 30,
       alpha: 0,
-      duration: 650,
+      duration: 750,
       onComplete: () => popup.destroy(),
     });
+  }
+
+  private showHomeResult(): void {
+    const { width, height } = this.scale;
+    this.add.rectangle(width / 2, height / 2, width, height, 0x20172b, 0.72);
+    this.add.rectangle(width / 2, height / 2, 690, 330, 0xfff3dc).setStrokeStyle(5, 0x7c4d2b);
+    this.add.text(width / 2, height / 2 - 105, 'Чешка вернулась домой', {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '38px',
+      color: '#4d2c1d',
+      align: 'center',
+    }).setOrigin(0.5);
+    this.add.text(
+      width / 2,
+      height / 2 - 18,
+      'Тебя поймали три раза. Теперь Чешка дома —\nсытая, целая и немного недовольная.\nНо двор всё ещё ждёт её следующий побег.',
+      {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '22px',
+        color: '#5d4037',
+        align: 'center',
+        lineSpacing: 8,
+      },
+    ).setOrigin(0.5);
+    this.add.text(width / 2, height / 2 + 92, `Рейтинг прогулки: ${this.score}`, {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '24px',
+      color: '#2e7d32',
+      align: 'center',
+    }).setOrigin(0.5);
+
+    const restartButton = this.add.rectangle(width / 2, height / 2 + 145, 250, 52, 0x79b66a)
+      .setStrokeStyle(3, 0x315a2c)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(width / 2, height / 2 + 145, 'Сбежать снова', {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '22px',
+      color: '#ffffff',
+    }).setOrigin(0.5);
+    restartButton.on('pointerdown', () => this.scene.restart());
   }
 
   private drawBudvaYard(width: number, height: number): void {
@@ -165,9 +286,15 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff',
     }).setOrigin(0.5);
 
-    this.add.circle(330, 290, 42, 0x3f8f48);
-    this.add.circle(515, 180, 36, 0x4fa35a);
-    this.add.circle(620, 390, 48, 0x367d3e);
+    this.bushes = [
+      { x: 330, y: 290, radius: 42 },
+      { x: 515, y: 180, radius: 36 },
+      { x: 620, y: 390, radius: 48 },
+    ];
+
+    for (const bush of this.bushes) {
+      this.add.circle(bush.x, bush.y, bush.radius, 0x3f8f48);
+    }
 
     this.add.rectangle(430, 340, 120, 52, 0x5d6f8f).setStrokeStyle(2, 0x28364e);
     this.add.text(430, 340, 'машина', {
