@@ -12,6 +12,7 @@ import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
 import { createPosterStates } from '../systems/posterLayout';
+import { getResultRank } from '../systems/resultRank';
 import { distance, type Point } from '../utils/movement';
 
 const POSTER_COLLECTION_RADIUS = 34;
@@ -559,18 +560,30 @@ export class GameScene extends Phaser.Scene {
     const bestScoreResult = saveBestScoreIfHigher(window.localStorage, this.score);
     this.bestScore = bestScoreResult.bestScore;
     const recordText = bestScoreResult.isNewRecord ? 'Новый рекорд! ★' : `Рекорд: ${bestScoreResult.bestScore}`;
+    const rank = getResultRank({
+      score: this.score,
+      postersTorn: this.totalCollectedPosterCount,
+      nightsSurvived: this.survivedNightCount,
+    });
     const resultDepth = 300;
     this.add.rectangle(width / 2, height / 2, width, height, 0x20172b, 0.72).setDepth(resultDepth);
-    this.add.rectangle(width / 2, height / 2, 720, 430, 0xfff3dc).setStrokeStyle(5, 0x7c4d2b).setDepth(resultDepth + 1);
-    this.add.text(width / 2, height / 2 - 155, 'Чешка вернулась домой', {
+    this.add.rectangle(width / 2, height / 2, 720, 470, 0xfff3dc).setStrokeStyle(5, 0x7c4d2b).setDepth(resultDepth + 1);
+    this.add.text(width / 2, height / 2 - 175, 'Чешка вернулась домой', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '38px',
       color: '#4d2c1d',
       align: 'center',
     }).setOrigin(0.5).setDepth(resultDepth + 2);
+    this.add.text(width / 2, height / 2 - 124, `${rank.title}\n${rank.description}`, {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '22px',
+      color: '#6d4c9f',
+      align: 'center',
+      lineSpacing: 5,
+    }).setOrigin(0.5).setDepth(resultDepth + 2);
     this.add.text(
       width / 2,
-      height / 2 - 72,
+      height / 2 - 48,
       'Тебя поймали три раза. Теперь Чешка дома —\nсытая, целая и немного недовольная.\nНо двор всё ещё ждёт её следующий побег.',
       {
         fontFamily: 'Arial, sans-serif',
@@ -582,7 +595,7 @@ export class GameScene extends Phaser.Scene {
     ).setOrigin(0.5).setDepth(resultDepth + 2);
     this.add.text(
       width / 2,
-      height / 2 + 70,
+      height / 2 + 92,
       `Рейтинг прогулки: ${this.score}\n${recordText}\nСорвано объявлений: ${this.totalCollectedPosterCount}\nПережито ночей: ${this.survivedNightCount}`,
       {
         fontFamily: 'Arial, sans-serif',
@@ -593,11 +606,11 @@ export class GameScene extends Phaser.Scene {
       },
     ).setOrigin(0.5).setDepth(resultDepth + 2);
 
-    const restartButton = this.add.rectangle(width / 2, height / 2 + 170, 250, 52, 0x79b66a)
+    const restartButton = this.add.rectangle(width / 2, height / 2 + 194, 250, 52, 0x79b66a)
       .setStrokeStyle(3, 0x315a2c)
       .setDepth(resultDepth + 2)
       .setInteractive({ useHandCursor: true });
-    this.add.text(width / 2, height / 2 + 170, 'Сбежать снова', {
+    this.add.text(width / 2, height / 2 + 194, 'Сбежать снова', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '22px',
       color: '#ffffff',
