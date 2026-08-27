@@ -6,6 +6,8 @@ describe('how to play content', () => {
     const text = getHowToPlayText();
 
     expect(text).toContain('Днём срывай объявления');
+    expect(text).toContain('цепочки');
+    expect(text).toContain('очисти двор');
     expect(text).toContain('Не попадай в зоны видимости людей');
     expect(text).toContain('Прячься в кустах');
     expect(text).toContain('Используй рывок');
@@ -15,6 +17,6 @@ describe('how to play content', () => {
 
   it('keeps the instruction short enough for a Telegram phone screen', () => {
     expect(HOW_TO_PLAY_STEPS).toHaveLength(6);
-    expect(getHowToPlayText().length).toBeLessThan(430);
+    expect(getHowToPlayText().length).toBeLessThan(470);
   });
 });

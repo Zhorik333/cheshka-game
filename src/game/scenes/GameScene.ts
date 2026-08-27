@@ -4,6 +4,7 @@ import { Human } from '../entities/Human';
 import { loadBestScore, saveBestScoreIfHigher } from '../systems/bestScore';
 import { recordCatch, type CatchState } from '../systems/catch';
 import { advanceDayNight, createDayNightState, fastForwardToPhaseEnd, getPhaseLabel, isNightLikePhase, type DayNightState } from '../systems/dayNight';
+import { evaluateDayClearBonus } from '../systems/dayClearBonus';
 import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashReady, performDash, type DashState } from '../systems/dash';
 import { isCatDetected } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
@@ -42,6 +43,7 @@ export class GameScene extends Phaser.Scene {
   private collectedPosterCount = 0;
   private totalCollectedPosterCount = 0;
   private survivedNightCount = 0;
+  private dayClearAwarded = false;
   private bestScore = 0;
   private scoreText?: Phaser.GameObjects.Text;
   private posters: PosterState[] = [];
@@ -75,6 +77,7 @@ export class GameScene extends Phaser.Scene {
     this.collectedPosterCount = 0;
     this.totalCollectedPosterCount = 0;
     this.survivedNightCount = 0;
+    this.dayClearAwarded = false;
     this.bestScore = loadBestScore(window.localStorage);
     this.posters = [];
     this.posterSprites.clear();
@@ -290,7 +293,26 @@ export class GameScene extends Phaser.Scene {
 
     const scoreLabel = combo.bonusScore > 0 ? `+${result.scoreDelta + combo.bonusScore}  ${combo.label}` : `+${result.scoreDelta}`;
     this.showPopup(this.cat.position.x, this.cat.position.y - 34, scoreLabel, combo.bonusScore > 0 ? '#6d4c9f' : '#2e7d32');
+    this.awardDayClearBonusIfReady();
     this.updateHud();
+  }
+
+  private awardDayClearBonusIfReady(): void {
+    const bonus = evaluateDayClearBonus({
+      phase: this.dayNight.phase,
+      collectedCount: this.collectedPosterCount,
+      totalCount: this.posters.length,
+      alreadyAwarded: this.dayClearAwarded,
+    });
+
+    if (!bonus.shouldAward) {
+      return;
+    }
+
+    this.dayClearAwarded = true;
+    this.score += bonus.bonusScore;
+    this.dayNight = fastForwardToPhaseEnd(this.dayNight);
+    this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 128, `${bonus.label}  Скоро ночь!`, '#6d4c9f');
   }
 
   private checkHumanDetection(timeMs: number): void {
@@ -395,6 +417,7 @@ export class GameScene extends Phaser.Scene {
 
   private startNewDayCycle(): void {
     this.collectedPosterCount = 0;
+    this.dayClearAwarded = false;
     this.createPosters();
     this.createHumans();
     this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 82, `Новый день: ${this.posters.length} объявлений!`, '#2e7d32');
