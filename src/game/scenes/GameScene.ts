@@ -3,7 +3,7 @@ import { Cat } from '../entities/Cat';
 import { Human } from '../entities/Human';
 import { loadBestScore, saveBestScoreIfHigher } from '../systems/bestScore';
 import { recordCatch, type CatchState } from '../systems/catch';
-import { advanceDayNight, createDayNightState, getPhaseLabel, isNightLikePhase, type DayNightState } from '../systems/dayNight';
+import { advanceDayNight, createDayNightState, fastForwardToPhaseEnd, getPhaseLabel, isNightLikePhase, type DayNightState } from '../systems/dayNight';
 import { isCatDetected } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
@@ -97,6 +97,10 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    if (import.meta.env.DEV) {
+      this.input.keyboard?.on('keydown-N', () => this.fastForwardCurrentPhase());
+    }
+
     this.add.text(width / 2, height - 28, 'Срывай объявления и не заходи в красные зоны людей ♪', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '18px',
@@ -104,6 +108,16 @@ export class GameScene extends Phaser.Scene {
       backgroundColor: 'rgba(255,255,255,0.72)',
       padding: { x: 8, y: 5 },
     }).setOrigin(0.5);
+
+    if (import.meta.env.DEV) {
+      this.add.text(width - 24, height - 28, 'Dev: N = следующая фаза', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '15px',
+        color: '#5d4037',
+        backgroundColor: 'rgba(255,255,255,0.64)',
+        padding: { x: 7, y: 4 },
+      }).setOrigin(1, 0.5);
+    }
   }
 
   update(time: number, delta: number): void {
@@ -120,6 +134,16 @@ export class GameScene extends Phaser.Scene {
 
     this.collectPostersNearCat();
     this.checkHumanDetection(time);
+  }
+
+  private fastForwardCurrentPhase(): void {
+    if (this.catchState.ended) {
+      return;
+    }
+
+    this.dayNight = fastForwardToPhaseEnd(this.dayNight);
+    this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 132, 'Dev: следующая фаза через 1 мс', '#6d4c9f');
+    this.updateHud();
   }
 
   private updateDayNight(deltaMs: number): void {

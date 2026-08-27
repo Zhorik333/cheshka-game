@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { advanceDayNight, createDayNightState } from './dayNight';
+import { advanceDayNight, createDayNightState, fastForwardToPhaseEnd } from './dayNight';
 
 describe('advanceDayNight', () => {
   it('starts on day one with the configured day duration', () => {
@@ -50,5 +50,15 @@ describe('advanceDayNight', () => {
 
     expect(next.phase).toBe('toNight');
     expect(next.remainingMs).toBe(2_000);
+  });
+
+  it('can fast-forward a phase to its final tick for quick dev testing', () => {
+    const state = createDayNightState({ dayMs: 60_000, nightMs: 45_000, transitionMs: 3_000 });
+    const skipped = fastForwardToPhaseEnd(state);
+
+    expect(skipped.phase).toBe('day');
+    expect(skipped.remainingMs).toBe(1);
+    expect(skipped.cycle).toBe(1);
+    expect(advanceDayNight(skipped, 1).phase).toBe('toNight');
   });
 });

@@ -61,3 +61,7 @@ export function getPhaseLabel(phase: DayNightPhase): string {
 export function isNightLikePhase(phase: DayNightPhase): boolean {
   return phase === 'night' || phase === 'toDay';
 }
+
+export function fastForwardToPhaseEnd(state: DayNightState): DayNightState {
+  return { ...state, remainingMs: 1 };
+}
