@@ -7,6 +7,7 @@ import { advanceDayNight, createDayNightState, fastForwardToPhaseEnd, getPhaseLa
 import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashReady, performDash, type DashState } from '../systems/dash';
 import { isCatDetected } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
+import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
 import { createPosterStates } from '../systems/posterLayout';
 import { distance, type Point } from '../utils/movement';
@@ -23,6 +24,7 @@ const DASH_CONFIG = {
   distance: 90,
   cooldownMs: 2_500,
 };
+const POSTER_COMBO_WINDOW_MS = 4_000;
 
 type PosterSprite = {
   paper: Phaser.GameObjects.Rectangle;
@@ -54,6 +56,7 @@ export class GameScene extends Phaser.Scene {
   private dashCooldownFill?: Phaser.GameObjects.Arc;
   private dashCooldownText?: Phaser.GameObjects.Text;
   private dashState: DashState = createDashState(DASH_CONFIG);
+  private posterCombo: PosterComboState = createPosterComboState(POSTER_COMBO_WINDOW_MS);
   private catchState: CatchState = {
     catches: 0,
     maxCatches: 3,
@@ -85,6 +88,7 @@ export class GameScene extends Phaser.Scene {
     this.dashCooldownFill = undefined;
     this.dashCooldownText = undefined;
     this.dashState = createDashState(DASH_CONFIG);
+    this.posterCombo = createPosterComboState(POSTER_COMBO_WINDOW_MS);
     this.catchState = { catches: 0, maxCatches: 3, invulnerableUntilMs: 0, ended: false };
 
     this.drawBudvaYard(width, height);
@@ -151,7 +155,7 @@ export class GameScene extends Phaser.Scene {
       human.update(delta);
     }
 
-    this.collectPostersNearCat();
+    this.collectPostersNearCat(time);
     this.checkHumanDetection(time);
     this.updateDashButton(time);
   }
@@ -258,7 +262,7 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
   }
 
-  private collectPostersNearCat(): void {
+  private collectPostersNearCat(timeMs: number): void {
     if (!this.cat) {
       return;
     }
@@ -270,7 +274,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.posters = result.posters;
-    this.score += result.scoreDelta;
+    const combo = recordPosterCombo(this.posterCombo, timeMs, result.collectedIds.length);
+    this.posterCombo = combo.state;
+    this.score += result.scoreDelta + combo.bonusScore;
     this.collectedPosterCount += result.collectedIds.length;
     this.totalCollectedPosterCount += result.collectedIds.length;
 
@@ -282,7 +288,8 @@ export class GameScene extends Phaser.Scene {
       this.posterSprites.delete(posterId);
     }
 
-    this.showPopup(this.cat.position.x, this.cat.position.y - 34, `+${result.scoreDelta}`, '#2e7d32');
+    const scoreLabel = combo.bonusScore > 0 ? `+${result.scoreDelta + combo.bonusScore}  ${combo.label}` : `+${result.scoreDelta}`;
+    this.showPopup(this.cat.position.x, this.cat.position.y - 34, scoreLabel, combo.bonusScore > 0 ? '#6d4c9f' : '#2e7d32');
     this.updateHud();
   }
 
