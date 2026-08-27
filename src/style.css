@@ -6,14 +6,25 @@ body,
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #171a27;
+  background: var(--tg-bg-color, #171a27);
   touch-action: none;
 }
 
 body {
+  color: var(--tg-text-color, #fff3dc);
   font-family: Arial, Helvetica, sans-serif;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 canvas {
   display: block;
+}
+
+#game {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
 }
