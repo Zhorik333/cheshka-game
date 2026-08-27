@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildTelegramShareUrl, shareGameResult, type ShareResultEnvironment } from './shareResult';
 
 describe('share result', () => {
-  it('builds a Telegram share URL with the game link and cozy result text', () => {
+  it('builds a Telegram share URL with a short clean text and the game link', () => {
     const shareUrl = buildTelegramShareUrl({
       gameUrl: 'https://zhorik333.github.io/cheshka-game/',
       score: 145,
@@ -14,9 +14,8 @@ describe('share result', () => {
     const parsed = new URL(shareUrl);
     expect(parsed.origin + parsed.pathname).toBe('https://t.me/share/url');
     expect(parsed.searchParams.get('url')).toBe('https://zhorik333.github.io/cheshka-game/');
-    expect(parsed.searchParams.get('text')).toBe(
-      'Я помог Чешке сбежать в Будве! 🐾 Рейтинг: 145, объявления: 12, ночей: 2. Звание: Ночной разведчик. Попробуй побить мой результат!',
-    );
+    expect(parsed.searchParams.get('text')).toBe('Чешка снова на свободе. Мой рейтинг: 145. Сыграй тоже.');
+    expect(parsed.searchParams.get('text')?.length).toBeLessThanOrEqual(64);
   });
 
   it('opens the share URL through Telegram when available', () => {

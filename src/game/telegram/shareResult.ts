@@ -45,5 +45,5 @@ export function shareGameResult(env: ShareResultEnvironment, stats: ShareResultS
 }
 
 function buildShareText(input: ShareResultStats): string {
-  return `Я помог Чешке сбежать в Будве! 🐾 Рейтинг: ${input.score}, объявления: ${input.postersTorn}, ночей: ${input.nightsSurvived}. Звание: ${input.rankTitle}. Попробуй побить мой результат!`;
+  return `Чешка снова на свободе. Мой рейтинг: ${input.score}. Сыграй тоже.`;
 }
