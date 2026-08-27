@@ -12,6 +12,7 @@ import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { getPhaseObjective } from '../systems/phaseObjective';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
+import { shareGameResult } from '../telegram/shareResult';
 import { createPosterStates } from '../systems/posterLayout';
 import { getResultRank } from '../systems/resultRank';
 import { distance, type Point } from '../utils/movement';
@@ -630,16 +631,38 @@ export class GameScene extends Phaser.Scene {
       },
     ).setOrigin(0.5).setDepth(resultDepth + 2);
 
-    const restartButton = this.add.rectangle(width / 2, height / 2 + 194, 250, 52, 0x79b66a)
+    const restartButton = this.add.rectangle(width / 2 - 145, height / 2 + 194, 250, 52, 0x79b66a)
       .setStrokeStyle(3, 0x315a2c)
       .setDepth(resultDepth + 2)
       .setInteractive({ useHandCursor: true });
-    this.add.text(width / 2, height / 2 + 194, 'Сбежать снова', {
+    this.add.text(width / 2 - 145, height / 2 + 194, 'Сбежать снова', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '22px',
       color: '#ffffff',
     }).setOrigin(0.5).setDepth(resultDepth + 3);
     restartButton.on('pointerdown', () => this.scene.restart());
+
+    const shareButton = this.add.rectangle(width / 2 + 145, height / 2 + 194, 250, 52, 0x6d4c9f)
+      .setStrokeStyle(3, 0x3b255d)
+      .setDepth(resultDepth + 2)
+      .setInteractive({ useHandCursor: true });
+    this.add.text(width / 2 + 145, height / 2 + 194, 'Поделиться', {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '22px',
+      color: '#ffffff',
+    }).setOrigin(0.5).setDepth(resultDepth + 3);
+    shareButton.on('pointerdown', () => {
+      shareGameResult({
+        locationHref: window.location.href,
+        telegramWebApp: (window as { Telegram?: { WebApp?: { openTelegramLink?: (url: string) => void } } }).Telegram?.WebApp,
+        assignLocation: (url) => window.location.assign(url),
+      }, {
+        score: this.score,
+        postersTorn: this.totalCollectedPosterCount,
+        nightsSurvived: this.survivedNightCount,
+        rankTitle: rank.title,
+      });
+    });
   }
 
   private drawBudvaYard(width: number, height: number): void {
