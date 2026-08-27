@@ -8,6 +8,7 @@ import { evaluateDayClearBonus } from '../systems/dayClearBonus';
 import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashReady, performDash, type DashState } from '../systems/dash';
 import { isCatDetected } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
+import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
 import { createPosterStates } from '../systems/posterLayout';
@@ -46,6 +47,7 @@ export class GameScene extends Phaser.Scene {
   private dayClearAwarded = false;
   private bestScore = 0;
   private scoreText?: Phaser.GameObjects.Text;
+  private hidingText?: Phaser.GameObjects.Text;
   private posters: PosterState[] = [];
   private readonly posterSprites = new Map<string, PosterSprite>();
   private humans: Human[] = [];
@@ -58,6 +60,7 @@ export class GameScene extends Phaser.Scene {
   private dashCooldownFill?: Phaser.GameObjects.Arc;
   private dashCooldownText?: Phaser.GameObjects.Text;
   private dashState: DashState = createDashState(DASH_CONFIG);
+  private catIsHidden = false;
   private posterCombo: PosterComboState = createPosterComboState(POSTER_COMBO_WINDOW_MS);
   private catchState: CatchState = {
     catches: 0,
@@ -79,6 +82,7 @@ export class GameScene extends Phaser.Scene {
     this.survivedNightCount = 0;
     this.dayClearAwarded = false;
     this.bestScore = loadBestScore(window.localStorage);
+    this.catIsHidden = false;
     this.posters = [];
     this.posterSprites.clear();
     this.humans = [];
@@ -87,6 +91,7 @@ export class GameScene extends Phaser.Scene {
     this.nightScoreAccumulatorMs = 0;
     this.nightOverlay = undefined;
     this.phaseNotice = undefined;
+    this.hidingText = undefined;
     this.dashButton = undefined;
     this.dashCooldownFill = undefined;
     this.dashCooldownText = undefined;
@@ -110,6 +115,14 @@ export class GameScene extends Phaser.Scene {
       padding: { x: 10, y: 7 },
     }).setDepth(200);
     this.updateHud();
+    this.hidingText = this.add.text(24, 62, '', {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '18px',
+      color: '#b3261e',
+      backgroundColor: 'rgba(255,255,255,0.72)',
+      padding: { x: 10, y: 6 },
+    }).setDepth(200);
+    this.updateHidingIndicator(false);
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       const dashButtonCenter = { x: width - 78, y: height - 92 };
@@ -159,8 +172,28 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.collectPostersNearCat(time);
+    this.updateHidingIndicator(true);
     this.checkHumanDetection(time);
     this.updateDashButton(time);
+  }
+
+  private updateHidingIndicator(showTransitionPopup: boolean): void {
+    if (!this.cat) {
+      return;
+    }
+
+    const update = updateHidingStatus(this.catIsHidden, this.isCatInBush(this.cat.position));
+    this.catIsHidden = update.isHidden;
+    const status = getHidingStatus(this.catIsHidden);
+    this.hidingText?.setText(status.label);
+    this.hidingText?.setColor(status.color);
+
+    if (!showTransitionPopup || update.event === 'none') {
+      return;
+    }
+
+    const message = update.event === 'entered' ? 'Чешка спряталась 🌿' : 'Чешка снова на виду!';
+    this.showPopup(this.cat.position.x, this.cat.position.y - 68, message, status.color);
   }
 
   private fastForwardCurrentPhase(): void {
