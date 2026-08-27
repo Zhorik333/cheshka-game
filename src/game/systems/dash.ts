@@ -45,3 +45,21 @@ export function performDash(
     },
   };
 }
+
+export function isDashReady(state: DashState, timeMs: number): boolean {
+  return timeMs >= state.availableAtMs;
+}
+
+export function getDashCooldownSeconds(state: DashState, timeMs: number): number {
+  return Math.ceil(Math.max(0, state.availableAtMs - timeMs) / 1000);
+}
+
+export function getDashCooldownRatio(state: DashState, timeMs: number): number {
+  const remainingMs = Math.max(0, state.availableAtMs - timeMs);
+
+  if (remainingMs === 0) {
+    return 0;
+  }
+
+  return Math.min(1, remainingMs / state.cooldownMs);
+}

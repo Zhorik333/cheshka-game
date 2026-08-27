@@ -4,7 +4,7 @@ import { Human } from '../entities/Human';
 import { loadBestScore, saveBestScoreIfHigher } from '../systems/bestScore';
 import { recordCatch, type CatchState } from '../systems/catch';
 import { advanceDayNight, createDayNightState, fastForwardToPhaseEnd, getPhaseLabel, isNightLikePhase, type DayNightState } from '../systems/dayNight';
-import { createDashState, performDash, type DashState } from '../systems/dash';
+import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashReady, performDash, type DashState } from '../systems/dash';
 import { isCatDetected } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
@@ -50,6 +50,9 @@ export class GameScene extends Phaser.Scene {
   private nightScoreAccumulatorMs = 0;
   private nightOverlay?: Phaser.GameObjects.Rectangle;
   private phaseNotice?: Phaser.GameObjects.Text;
+  private dashButton?: Phaser.GameObjects.Arc;
+  private dashCooldownFill?: Phaser.GameObjects.Arc;
+  private dashCooldownText?: Phaser.GameObjects.Text;
   private dashState: DashState = createDashState(DASH_CONFIG);
   private catchState: CatchState = {
     catches: 0,
@@ -78,6 +81,9 @@ export class GameScene extends Phaser.Scene {
     this.nightScoreAccumulatorMs = 0;
     this.nightOverlay = undefined;
     this.phaseNotice = undefined;
+    this.dashButton = undefined;
+    this.dashCooldownFill = undefined;
+    this.dashCooldownText = undefined;
     this.dashState = createDashState(DASH_CONFIG);
     this.catchState = { catches: 0, maxCatches: 3, invulnerableUntilMs: 0, ended: false };
 
@@ -147,6 +153,7 @@ export class GameScene extends Phaser.Scene {
 
     this.collectPostersNearCat();
     this.checkHumanDetection(time);
+    this.updateDashButton(time);
   }
 
   private fastForwardCurrentPhase(): void {
@@ -166,6 +173,7 @@ export class GameScene extends Phaser.Scene {
 
     const result = performDash(this.dashState, this.cat.position, this.cat.targetPosition, timeMs);
     this.dashState = result.state;
+    this.updateDashButton(timeMs);
 
     if (!result.dashed) {
       const waitSeconds = Math.ceil((this.dashState.availableAtMs - timeMs) / 1000);
@@ -178,10 +186,14 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createDashButton(width: number, height: number): void {
-    const button = this.add.circle(width - 78, height - 92, 43, 0x6d4c9f, 0.88)
+    this.dashButton = this.add.circle(width - 78, height - 92, 43, 0x6d4c9f, 0.88)
       .setStrokeStyle(4, 0x3b255d)
       .setDepth(210)
       .setInteractive({ useHandCursor: true });
+
+    this.dashCooldownFill = this.add.circle(width - 78, height - 92, 38, 0x20172b, 0.68)
+      .setDepth(210.5)
+      .setVisible(false);
 
     this.add.text(width - 78, height - 98, 'Рывок', {
       fontFamily: 'Arial, sans-serif',
@@ -190,14 +202,23 @@ export class GameScene extends Phaser.Scene {
       align: 'center',
     }).setOrigin(0.5).setDepth(211);
 
-    this.add.text(width - 78, height - 76, 'Space', {
+    this.dashCooldownText = this.add.text(width - 78, height - 76, 'готов', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '12px',
       color: '#eadcff',
       align: 'center',
     }).setOrigin(0.5).setDepth(211);
 
-    button.on('pointerdown', () => this.tryDash(this.time.now));
+    this.dashButton.on('pointerdown', () => this.tryDash(this.time.now));
+    this.updateDashButton(this.time.now);
+  }
+
+  private updateDashButton(timeMs: number): void {
+    const ready = isDashReady(this.dashState, timeMs);
+    this.dashButton?.setFillStyle(ready ? 0x6d4c9f : 0x7c6f8f, ready ? 0.88 : 0.62);
+    this.dashCooldownFill?.setVisible(!ready);
+    this.dashCooldownFill?.setAlpha(0.25 + getDashCooldownRatio(this.dashState, timeMs) * 0.48);
+    this.dashCooldownText?.setText(ready ? 'готов' : `${getDashCooldownSeconds(this.dashState, timeMs)}с`);
   }
 
   private updateDayNight(deltaMs: number): void {

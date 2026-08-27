@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDashState, performDash } from './dash';
+import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashReady, performDash } from './dash';
 
 describe('performDash', () => {
   it('moves the cat toward the target by the dash distance', () => {
@@ -29,5 +29,20 @@ describe('performDash', () => {
     expect(result.dashed).toBe(false);
     expect(result.position).toEqual({ x: 0, y: 0 });
     expect(result.state).toEqual(coolingDown);
+  });
+
+  it('reports readiness and cooldown progress for the action button', () => {
+    const coolingDown = {
+      ...createDashState({ distance: 90, cooldownMs: 2_500 }),
+      availableAtMs: 3_500,
+    };
+
+    expect(isDashReady(coolingDown, 1_000)).toBe(false);
+    expect(getDashCooldownSeconds(coolingDown, 1_000)).toBe(3);
+    expect(getDashCooldownRatio(coolingDown, 1_000)).toBe(1);
+    expect(getDashCooldownRatio(coolingDown, 2_250)).toBe(0.5);
+    expect(isDashReady(coolingDown, 3_500)).toBe(true);
+    expect(getDashCooldownSeconds(coolingDown, 3_500)).toBe(0);
+    expect(getDashCooldownRatio(coolingDown, 3_500)).toBe(0);
   });
 });
