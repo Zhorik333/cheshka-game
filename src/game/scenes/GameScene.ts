@@ -4,6 +4,7 @@ import { Human } from '../entities/Human';
 import { loadBestScore, saveBestScoreIfHigher } from '../systems/bestScore';
 import { recordCatch, type CatchState } from '../systems/catch';
 import { advanceDayNight, createDayNightState, fastForwardToPhaseEnd, getPhaseLabel, isNightLikePhase, type DayNightState } from '../systems/dayNight';
+import { createDashState, performDash, type DashState } from '../systems/dash';
 import { isCatDetected } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
@@ -18,6 +19,10 @@ const DAY_NIGHT_CONFIG = {
   transitionMs: 3_000,
 };
 const NIGHT_SURVIVAL_SCORE_INTERVAL_MS = 1000;
+const DASH_CONFIG = {
+  distance: 90,
+  cooldownMs: 2_500,
+};
 
 type PosterSprite = {
   paper: Phaser.GameObjects.Rectangle;
@@ -45,6 +50,7 @@ export class GameScene extends Phaser.Scene {
   private nightScoreAccumulatorMs = 0;
   private nightOverlay?: Phaser.GameObjects.Rectangle;
   private phaseNotice?: Phaser.GameObjects.Text;
+  private dashState: DashState = createDashState(DASH_CONFIG);
   private catchState: CatchState = {
     catches: 0,
     maxCatches: 3,
@@ -72,6 +78,7 @@ export class GameScene extends Phaser.Scene {
     this.nightScoreAccumulatorMs = 0;
     this.nightOverlay = undefined;
     this.phaseNotice = undefined;
+    this.dashState = createDashState(DASH_CONFIG);
     this.catchState = { catches: 0, maxCatches: 3, invulnerableUntilMs: 0, ended: false };
 
     this.drawBudvaYard(width, height);
@@ -92,7 +99,9 @@ export class GameScene extends Phaser.Scene {
     this.updateHud();
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      if (!this.catchState.ended) {
+      const dashButtonCenter = { x: width - 78, y: height - 92 };
+      const tappedDashButton = distance(dashButtonCenter, { x: pointer.worldX, y: pointer.worldY }) <= 56;
+      if (!this.catchState.ended && !tappedDashButton) {
         this.cat?.setTarget({ x: pointer.worldX, y: pointer.worldY });
       }
     });
@@ -100,6 +109,10 @@ export class GameScene extends Phaser.Scene {
     if (import.meta.env.DEV) {
       this.input.keyboard?.on('keydown-N', () => this.fastForwardCurrentPhase());
     }
+
+    this.input.keyboard?.on('keydown-SPACE', () => this.tryDash(this.time.now));
+
+    this.createDashButton(width, height);
 
     this.add.text(width / 2, height - 28, 'Срывай объявления и не заходи в красные зоны людей ♪', {
       fontFamily: 'Arial, sans-serif',
@@ -144,6 +157,47 @@ export class GameScene extends Phaser.Scene {
     this.dayNight = fastForwardToPhaseEnd(this.dayNight);
     this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 132, 'Dev: следующая фаза через 1 мс', '#6d4c9f');
     this.updateHud();
+  }
+
+  private tryDash(timeMs: number): void {
+    if (!this.cat || this.catchState.ended) {
+      return;
+    }
+
+    const result = performDash(this.dashState, this.cat.position, this.cat.targetPosition, timeMs);
+    this.dashState = result.state;
+
+    if (!result.dashed) {
+      const waitSeconds = Math.ceil((this.dashState.availableAtMs - timeMs) / 1000);
+      this.showPopup(this.cat.position.x, this.cat.position.y - 54, `Рывок через ${waitSeconds}с`, '#7c4d2b');
+      return;
+    }
+
+    this.cat.snapTo(result.position);
+    this.showPopup(result.position.x, result.position.y - 54, 'Прыг-скок! ✦', '#6d4c9f');
+  }
+
+  private createDashButton(width: number, height: number): void {
+    const button = this.add.circle(width - 78, height - 92, 43, 0x6d4c9f, 0.88)
+      .setStrokeStyle(4, 0x3b255d)
+      .setDepth(210)
+      .setInteractive({ useHandCursor: true });
+
+    this.add.text(width - 78, height - 98, 'Рывок', {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '17px',
+      color: '#ffffff',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(211);
+
+    this.add.text(width - 78, height - 76, 'Space', {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '12px',
+      color: '#eadcff',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(211);
+
+    button.on('pointerdown', () => this.tryDash(this.time.now));
   }
 
   private updateDayNight(deltaMs: number): void {

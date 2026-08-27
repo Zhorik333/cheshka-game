@@ -34,6 +34,11 @@ export class Cat {
     this.label.setPosition(position.x, position.y - 31);
   }
 
+  snapTo(position: Point): void {
+    this.body.setPosition(position.x, position.y);
+    this.label.setPosition(position.x, position.y - 31);
+  }
+
   update(deltaMs: number): void {
     const next = moveTowards(this.position, this.target, (this.speedPixelsPerSecond * deltaMs) / 1000);
     this.body.setPosition(next.x, next.y);
@@ -42,5 +47,9 @@ export class Cat {
 
   get position(): Point {
     return { x: this.body.x, y: this.body.y };
+  }
+
+  get targetPosition(): Point {
+    return { ...this.target };
   }
 }
