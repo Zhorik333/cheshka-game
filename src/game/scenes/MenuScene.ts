@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getTelegramBackButton, hideTelegramBackButton } from '../telegram/backButton';
 
 export class MenuScene extends Phaser.Scene {
   constructor() {
@@ -6,6 +7,8 @@ export class MenuScene extends Phaser.Scene {
   }
 
   create(): void {
+    hideTelegramBackButton(getTelegramBackButton(window));
+
     const { width, height } = this.scale;
 
     this.add.rectangle(width / 2, height / 2, width, height, 0xf6d8a8);

@@ -12,6 +12,7 @@ import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { getPhaseObjective } from '../systems/phaseObjective';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
+import { configureTelegramBackButton, getTelegramBackButton } from '../telegram/backButton';
 import { shareGameResult } from '../telegram/shareResult';
 import { createPosterStates } from '../systems/posterLayout';
 import { getResultRank } from '../systems/resultRank';
@@ -79,6 +80,12 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    const cleanupBackButton = configureTelegramBackButton(
+      getTelegramBackButton(window),
+      () => this.scene.start('MenuScene'),
+    );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupBackButton);
+
     const { width, height } = this.scale;
 
     this.score = 0;

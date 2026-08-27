@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { HOW_TO_PLAY_STEPS } from '../content/howToPlay';
+import { configureTelegramBackButton, getTelegramBackButton } from '../telegram/backButton';
 
 export class HowToScene extends Phaser.Scene {
   constructor() {
@@ -7,6 +8,12 @@ export class HowToScene extends Phaser.Scene {
   }
 
   create(): void {
+    const cleanupBackButton = configureTelegramBackButton(
+      getTelegramBackButton(window),
+      () => this.scene.start('MenuScene'),
+    );
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupBackButton);
+
     const { width, height } = this.scale;
 
     this.add.rectangle(width / 2, height / 2, width, height, 0xf6d8a8);
