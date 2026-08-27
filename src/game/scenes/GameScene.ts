@@ -9,6 +9,7 @@ import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashRe
 import { getDetectionDangerLevel, isCatDetected, type DetectionDangerLevel } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
 import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
+import { getPhaseObjective } from '../systems/phaseObjective';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
 import { createPosterStates } from '../systems/posterLayout';
@@ -48,6 +49,7 @@ export class GameScene extends Phaser.Scene {
   private dayClearAwarded = false;
   private bestScore = 0;
   private scoreText?: Phaser.GameObjects.Text;
+  private objectiveText?: Phaser.GameObjects.Text;
   private hidingText?: Phaser.GameObjects.Text;
   private dangerText?: Phaser.GameObjects.Text;
   private posters: PosterState[] = [];
@@ -93,6 +95,7 @@ export class GameScene extends Phaser.Scene {
     this.nightScoreAccumulatorMs = 0;
     this.nightOverlay = undefined;
     this.phaseNotice = undefined;
+    this.objectiveText = undefined;
     this.hidingText = undefined;
     this.dangerText = undefined;
     this.dashButton = undefined;
@@ -118,7 +121,15 @@ export class GameScene extends Phaser.Scene {
       padding: { x: 10, y: 7 },
     }).setDepth(200);
     this.updateHud();
-    this.hidingText = this.add.text(24, 62, '', {
+    this.objectiveText = this.add.text(24, 62, '', {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '18px',
+      color: '#4d2c1d',
+      backgroundColor: 'rgba(255,255,255,0.72)',
+      padding: { x: 10, y: 6 },
+    }).setDepth(200);
+    this.updateObjectiveIndicator();
+    this.hidingText = this.add.text(24, 104, '', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '18px',
       color: '#b3261e',
@@ -126,7 +137,7 @@ export class GameScene extends Phaser.Scene {
       padding: { x: 10, y: 6 },
     }).setDepth(200);
     this.updateHidingIndicator(false);
-    this.dangerText = this.add.text(24, 100, '', {
+    this.dangerText = this.add.text(24, 146, '', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '18px',
       color: '#2e7d32',
@@ -183,6 +194,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.collectPostersNearCat(time);
+    this.updateObjectiveIndicator();
     this.updateHidingIndicator(true);
     this.updateDangerIndicator();
     this.checkHumanDetection(time);
@@ -206,6 +218,15 @@ export class GameScene extends Phaser.Scene {
 
     const message = update.event === 'entered' ? 'Чешка спряталась 🌿' : 'Чешка снова на виду!';
     this.showPopup(this.cat.position.x, this.cat.position.y - 68, message, status.color);
+  }
+
+  private updateObjectiveIndicator(): void {
+    this.objectiveText?.setText(getPhaseObjective({
+      phase: this.dayNight.phase,
+      remainingMs: this.dayNight.remainingMs,
+      collectedPosters: this.collectedPosterCount,
+      totalPosters: this.posters.length,
+    }));
   }
 
   private updateDangerIndicator(): void {
@@ -255,6 +276,7 @@ export class GameScene extends Phaser.Scene {
 
     this.dayNight = fastForwardToPhaseEnd(this.dayNight);
     this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 132, 'Dev: следующая фаза через 1 мс', '#6d4c9f');
+    this.updateObjectiveIndicator();
     this.updateHud();
   }
 
@@ -379,6 +401,7 @@ export class GameScene extends Phaser.Scene {
     const scoreLabel = combo.bonusScore > 0 ? `+${result.scoreDelta + combo.bonusScore}  ${combo.label}` : `+${result.scoreDelta}`;
     this.showPopup(this.cat.position.x, this.cat.position.y - 34, scoreLabel, combo.bonusScore > 0 ? '#6d4c9f' : '#2e7d32');
     this.awardDayClearBonusIfReady();
+    this.updateObjectiveIndicator();
     this.updateHud();
   }
 
@@ -444,6 +467,7 @@ export class GameScene extends Phaser.Scene {
     this.scoreText?.setText(
       `${getPhaseLabel(this.dayNight.phase)}: ${seconds}   Цикл: ${this.dayNight.cycle}   Рейтинг: ${this.score}   Рекорд: ${this.bestScore}   Объявления: ${this.collectedPosterCount}/${this.posters.length}   Свобода: ${paws}`,
     );
+    this.updateObjectiveIndicator();
   }
 
   private createPosters(): void {
