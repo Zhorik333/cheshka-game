@@ -9,6 +9,10 @@ export type DetectionHuman = {
   viewAngleDegrees: number;
 };
 
+export type DetectionDangerLevel = 'safe' | 'warning' | 'detected';
+
+const WARNING_DISTANCE_MULTIPLIER = 1.35;
+
 export function isCatDetected(human: DetectionHuman, catPosition: Point, catIsHidden: boolean): boolean {
   if (catIsHidden) {
     return false;
@@ -27,4 +31,25 @@ export function isCatDetected(human: DetectionHuman, catPosition: Point, catIsHi
   const angleToCat = Math.acos(Math.max(-1, Math.min(1, dot))) * (180 / Math.PI);
 
   return angleToCat <= human.viewAngleDegrees / 2;
+}
+
+export function getDetectionDangerLevel(
+  human: DetectionHuman,
+  catPosition: Point,
+  catIsHidden: boolean,
+): DetectionDangerLevel {
+  if (isCatDetected(human, catPosition, catIsHidden)) {
+    return 'detected';
+  }
+
+  if (catIsHidden) {
+    return 'safe';
+  }
+
+  const warningHuman = {
+    ...human,
+    viewDistance: human.viewDistance * WARNING_DISTANCE_MULTIPLIER,
+  };
+
+  return isCatDetected(warningHuman, catPosition, false) ? 'warning' : 'safe';
 }

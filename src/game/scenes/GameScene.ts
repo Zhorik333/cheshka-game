@@ -6,7 +6,7 @@ import { recordCatch, type CatchState } from '../systems/catch';
 import { advanceDayNight, createDayNightState, fastForwardToPhaseEnd, getPhaseLabel, isNightLikePhase, type DayNightState } from '../systems/dayNight';
 import { evaluateDayClearBonus } from '../systems/dayClearBonus';
 import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashReady, performDash, type DashState } from '../systems/dash';
-import { isCatDetected } from '../systems/detection';
+import { getDetectionDangerLevel, isCatDetected, type DetectionDangerLevel } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
 import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
@@ -48,6 +48,7 @@ export class GameScene extends Phaser.Scene {
   private bestScore = 0;
   private scoreText?: Phaser.GameObjects.Text;
   private hidingText?: Phaser.GameObjects.Text;
+  private dangerText?: Phaser.GameObjects.Text;
   private posters: PosterState[] = [];
   private readonly posterSprites = new Map<string, PosterSprite>();
   private humans: Human[] = [];
@@ -92,6 +93,7 @@ export class GameScene extends Phaser.Scene {
     this.nightOverlay = undefined;
     this.phaseNotice = undefined;
     this.hidingText = undefined;
+    this.dangerText = undefined;
     this.dashButton = undefined;
     this.dashCooldownFill = undefined;
     this.dashCooldownText = undefined;
@@ -123,6 +125,14 @@ export class GameScene extends Phaser.Scene {
       padding: { x: 10, y: 6 },
     }).setDepth(200);
     this.updateHidingIndicator(false);
+    this.dangerText = this.add.text(24, 100, '', {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '18px',
+      color: '#2e7d32',
+      backgroundColor: 'rgba(255,255,255,0.72)',
+      padding: { x: 10, y: 6 },
+    }).setDepth(200);
+    this.updateDangerIndicator();
 
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       const dashButtonCenter = { x: width - 78, y: height - 92 };
@@ -173,6 +183,7 @@ export class GameScene extends Phaser.Scene {
 
     this.collectPostersNearCat(time);
     this.updateHidingIndicator(true);
+    this.updateDangerIndicator();
     this.checkHumanDetection(time);
     this.updateDashButton(time);
   }
@@ -194,6 +205,46 @@ export class GameScene extends Phaser.Scene {
 
     const message = update.event === 'entered' ? 'Чешка спряталась 🌿' : 'Чешка снова на виду!';
     this.showPopup(this.cat.position.x, this.cat.position.y - 68, message, status.color);
+  }
+
+  private updateDangerIndicator(): void {
+    if (!this.cat) {
+      return;
+    }
+
+    const dangerLevel = this.getCurrentDangerLevel();
+    const dangerStatus = this.getDangerStatus(dangerLevel);
+    this.dangerText?.setText(dangerStatus.label);
+    this.dangerText?.setColor(dangerStatus.color);
+  }
+
+  private getCurrentDangerLevel(): DetectionDangerLevel {
+    if (!this.cat) {
+      return 'safe';
+    }
+
+    let level: DetectionDangerLevel = 'safe';
+    for (const human of this.humans) {
+      const humanLevel = getDetectionDangerLevel(human.toDetectionHuman(), this.cat.position, this.catIsHidden);
+      if (humanLevel === 'detected') {
+        return 'detected';
+      }
+      if (humanLevel === 'warning') {
+        level = 'warning';
+      }
+    }
+    return level;
+  }
+
+  private getDangerStatus(level: DetectionDangerLevel): { label: string; color: string } {
+    switch (level) {
+      case 'detected':
+        return { label: 'Опасность: поймали!', color: '#b3261e' };
+      case 'warning':
+        return { label: 'Опасность: рядом фонарик!', color: '#c77700' };
+      case 'safe':
+        return { label: 'Опасность: спокойно', color: '#2e7d32' };
+    }
   }
 
   private fastForwardCurrentPhase(): void {
