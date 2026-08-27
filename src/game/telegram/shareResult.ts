@@ -24,7 +24,7 @@ type TelegramShareInput = ShareResultStats & {
 
 export function buildTelegramShareUrl(input: TelegramShareInput): string {
   const shareUrl = new URL('https://t.me/share/url');
-  shareUrl.searchParams.set('url', input.gameUrl);
+  shareUrl.searchParams.set('url', getCanonicalGameUrl(input.gameUrl));
   shareUrl.searchParams.set('text', buildShareText(input));
   return shareUrl.toString();
 }
@@ -42,6 +42,13 @@ export function shareGameResult(env: ShareResultEnvironment, stats: ShareResultS
 
   env.assignLocation?.(url);
   return { sharedVia: 'browser', url };
+}
+
+function getCanonicalGameUrl(gameUrl: string): string {
+  const url = new URL(gameUrl);
+  url.search = '';
+  url.hash = '';
+  return url.toString();
 }
 
 function buildShareText(input: ShareResultStats): string {

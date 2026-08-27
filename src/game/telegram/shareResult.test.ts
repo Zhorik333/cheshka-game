@@ -18,10 +18,25 @@ describe('share result', () => {
     expect(parsed.searchParams.get('text')?.length).toBeLessThanOrEqual(64);
   });
 
+  it('removes Telegram launch hash and query params from the shared game link', () => {
+    const shareUrl = buildTelegramShareUrl({
+      gameUrl: 'https://zhorik333.github.io/cheshka-game/#tgWebAppData=query_id%3Dsecret&tgWebAppVersion=9.6',
+      score: 0,
+      postersTorn: 0,
+      nightsSurvived: 0,
+      rankTitle: 'Домашняя разведчица',
+    });
+
+    const parsed = new URL(shareUrl);
+    expect(parsed.searchParams.get('url')).toBe('https://zhorik333.github.io/cheshka-game/');
+    expect(parsed.toString()).not.toContain('tgWebAppData');
+    expect(parsed.toString()).not.toContain('query_id');
+  });
+
   it('opens the share URL through Telegram when available', () => {
     const openedLinks: string[] = [];
     const env: ShareResultEnvironment = {
-      locationHref: 'https://zhorik333.github.io/cheshka-game/',
+      locationHref: 'https://zhorik333.github.io/cheshka-game/#tgWebAppData=query_id%3Dsecret&tgWebAppVersion=9.6',
       telegramWebApp: {
         openTelegramLink: (url: string) => openedLinks.push(url),
       },
@@ -37,6 +52,7 @@ describe('share result', () => {
     expect(result.sharedVia).toBe('telegram');
     expect(openedLinks).toHaveLength(1);
     expect(openedLinks[0]).toContain('https://t.me/share/url?');
+    expect(new URL(openedLinks[0]).searchParams.get('url')).toBe('https://zhorik333.github.io/cheshka-game/');
   });
 
   it('falls back to assigning location when Telegram bridge is absent', () => {
