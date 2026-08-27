@@ -14,8 +14,9 @@ describe('share result', () => {
     const parsed = new URL(shareUrl);
     expect(parsed.origin + parsed.pathname).toBe('https://t.me/share/url');
     expect(parsed.searchParams.get('url')).toBe('https://zhorik333.github.io/cheshka-game/');
-    expect(parsed.searchParams.get('text')).toBe('Чешка снова на свободе. Мой рейтинг: 145. Сыграй тоже.');
-    expect(parsed.searchParams.get('text')?.length).toBeLessThanOrEqual(64);
+    expect(parsed.searchParams.get('text')).toBe('Чешка снова на свободе. Сыграй тоже.');
+    expect(parsed.searchParams.get('text')).not.toContain('145');
+    expect(parsed.searchParams.get('text')?.length).toBeLessThanOrEqual(48);
   });
 
   it('removes Telegram launch hash and query params from the shared game link', () => {

@@ -51,6 +51,6 @@ function getCanonicalGameUrl(gameUrl: string): string {
   return url.toString();
 }
 
-function buildShareText(input: ShareResultStats): string {
-  return `Чешка снова на свободе. Мой рейтинг: ${input.score}. Сыграй тоже.`;
+function buildShareText(_input: ShareResultStats): string {
+  return 'Чешка снова на свободе. Сыграй тоже.';
 }
