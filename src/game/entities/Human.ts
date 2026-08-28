@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { getFlashlightPulseFrame } from '../systems/ambientAnimation';
-import { getFlashlightAlpha, HUMAN_VISUAL_DESIGN } from '../systems/entityVisualDesign';
+import { getFlashlightAlpha, getHumanMirrorScaleX, HUMAN_VISUAL_DESIGN } from '../systems/entityVisualDesign';
 import { advancePatrol, type PatrolState } from '../systems/patrol';
 import type { DetectionHuman } from '../systems/detection';
 import type { Point } from '../utils/movement';
@@ -80,7 +80,8 @@ export class Human {
     this.avatar.setPosition(this.patrol.x, this.patrol.y);
     this.label.setPosition(this.patrol.x, this.patrol.y - 45);
     const facing = this.patrol.facing ?? { x: 1, y: 0 };
-    this.avatar.setRotation(Math.atan2(facing.y, facing.x));
+    this.avatar.setRotation(0);
+    this.avatar.setScale(getHumanMirrorScaleX(facing.x), 1);
     this.redrawViewCone();
   }
 

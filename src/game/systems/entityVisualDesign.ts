@@ -46,3 +46,7 @@ export function getCatReadableFeatureLabels(design = CHESHKA_VISUAL_DESIGN): str
 export function getFlashlightAlpha(isNight: boolean): number {
   return isNight ? 0.38 : 0.26;
 }
+
+export function getHumanMirrorScaleX(facingX: number): 1 | -1 {
+  return facingX < 0 ? -1 : 1;
+}
