@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getPosterPulseFrame } from '../systems/ambientAnimation';
 import { Cat } from '../entities/Cat';
 import { Human } from '../entities/Human';
 import { loadBestScore, saveBestScoreIfHigher } from '../systems/bestScore';
@@ -38,6 +39,7 @@ type PosterSprite = {
   paper: Phaser.GameObjects.Rectangle;
   glow: Phaser.GameObjects.Arc;
   mark: Phaser.GameObjects.Text;
+  phaseOffsetMs: number;
 };
 
 type BushZone = Point & {
@@ -209,6 +211,7 @@ export class GameScene extends Phaser.Scene {
     this.updateDangerIndicator();
     this.checkHumanDetection(time);
     this.updateDashButton(time);
+    this.updatePosterAnimations(time);
   }
 
   private updateHidingIndicator(showTransitionPopup: boolean): void {
@@ -499,8 +502,20 @@ export class GameScene extends Phaser.Scene {
         fontSize: '20px',
         color: '#7d6824',
       }).setOrigin(0.5);
+      const phaseOffsetMs = Number.parseInt(poster.id.replace('poster-', ''), 10) * 113;
 
-      this.posterSprites.set(poster.id, { paper, glow, mark });
+      this.posterSprites.set(poster.id, { paper, glow, mark, phaseOffsetMs });
+    }
+    this.updatePosterAnimations(this.time.now);
+  }
+
+  private updatePosterAnimations(timeMs: number): void {
+    for (const sprite of this.posterSprites.values()) {
+      const pulse = getPosterPulseFrame(timeMs, sprite.phaseOffsetMs);
+      sprite.glow.setAlpha(pulse.alpha);
+      sprite.glow.setScale(pulse.scale);
+      sprite.paper.setAngle(Math.sin((timeMs + sprite.phaseOffsetMs) / 520) * 2.2);
+      sprite.mark.setY(sprite.paper.y - 1 + Math.sin((timeMs + sprite.phaseOffsetMs) / 260) * 1.5);
     }
   }
 

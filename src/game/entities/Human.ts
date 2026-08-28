@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { getFlashlightPulseFrame } from '../systems/ambientAnimation';
 import { getFlashlightAlpha, HUMAN_VISUAL_DESIGN } from '../systems/entityVisualDesign';
 import { advancePatrol, type PatrolState } from '../systems/patrol';
 import type { DetectionHuman } from '../systems/detection';
@@ -19,6 +20,7 @@ export class Human {
   private readonly viewAngleDegrees: number;
   private currentViewDistance: number;
   private isNightMode = false;
+  private elapsedMs = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -73,6 +75,7 @@ export class Human {
   }
 
   update(deltaMs: number): void {
+    this.elapsedMs += deltaMs;
     this.patrol = advancePatrol(this.patrol, (this.speedPixelsPerSecond * deltaMs) / 1000);
     this.avatar.setPosition(this.patrol.x, this.patrol.y);
     this.label.setPosition(this.patrol.x, this.patrol.y - 45);
@@ -123,9 +126,11 @@ export class Human {
 
     this.view.setTo(0, 0, left.x - this.patrol.x, left.y - this.patrol.y, right.x - this.patrol.x, right.y - this.patrol.y);
     this.view.setPosition(this.patrol.x, this.patrol.y);
+    const pulse = getFlashlightPulseFrame(this.isNightMode, this.elapsedMs);
+    this.view.setScale(pulse.scale);
     this.view.setFillStyle(
       this.isNightMode ? HUMAN_VISUAL_DESIGN.flashlightNightColor : HUMAN_VISUAL_DESIGN.flashlightDayColor,
-      getFlashlightAlpha(this.isNightMode),
+      pulse.alpha,
     );
   }
 }

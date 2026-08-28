@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
+import { getMovementBobFrame } from '../systems/ambientAnimation';
 import { CHESHKA_VISUAL_DESIGN } from '../systems/entityVisualDesign';
-import { moveTowards, type Point } from '../utils/movement';
+import { distance, moveTowards, type Point } from '../utils/movement';
 
 const CAT_COLOR = CHESHKA_VISUAL_DESIGN.bodyColor;
 const CAT_OUTLINE = CHESHKA_VISUAL_DESIGN.outlineColor;
@@ -8,9 +9,11 @@ const CAT_OUTLINE = CHESHKA_VISUAL_DESIGN.outlineColor;
 export class Cat {
   private target: Point;
   private readonly avatar: Phaser.GameObjects.Container;
+  private readonly visual: Phaser.GameObjects.Container;
   private readonly label: Phaser.GameObjects.Text;
 
   private readonly speedPixelsPerSecond: number;
+  private elapsedMs = 0;
 
   constructor(scene: Phaser.Scene, start: Point, speedPixelsPerSecond = 220) {
     this.speedPixelsPerSecond = speedPixelsPerSecond;
@@ -34,7 +37,7 @@ export class Cat {
     whiskers.lineBetween(13, -8, 22, -10);
     whiskers.lineBetween(13, -5, 22, -3);
 
-    this.avatar = scene.add.container(start.x, start.y, [
+    this.visual = scene.add.container(0, 0, [
       shadow,
       tail,
       body,
@@ -47,6 +50,8 @@ export class Cat {
       nose,
       whiskers,
     ]);
+
+    this.avatar = scene.add.container(start.x, start.y, [this.visual]);
 
     this.label = scene.add.text(start.x, start.y - 39, 'Чешка', {
       fontFamily: 'Arial, sans-serif',
@@ -73,10 +78,14 @@ export class Cat {
   }
 
   update(deltaMs: number): void {
+    this.elapsedMs += deltaMs;
     const current = this.position;
+    const moving = distance(current, this.target) > 1;
     const next = moveTowards(current, this.target, (this.speedPixelsPerSecond * deltaMs) / 1000);
     this.avatar.setPosition(next.x, next.y);
-    this.avatar.setScale(this.target.x < next.x ? -1 : 1, 1);
+    const facingScaleX = this.target.x < next.x ? -1 : 1;
+    this.visual.setScale(facingScaleX, getMovementBobFrame(moving, this.elapsedMs).scaleY);
+    this.visual.setY(getMovementBobFrame(moving, this.elapsedMs).yOffset);
     this.label.setPosition(next.x, next.y - 39);
   }
 
