@@ -1,21 +1,24 @@
 import Phaser from 'phaser';
+import { getFlashlightAlpha, HUMAN_VISUAL_DESIGN } from '../systems/entityVisualDesign';
 import { advancePatrol, type PatrolState } from '../systems/patrol';
 import type { DetectionHuman } from '../systems/detection';
 import type { Point } from '../utils/movement';
 
-const HUMAN_COLOR = 0x2f62b3;
-const VIEW_COLOR = 0xff5b4d;
+const HUMAN_COLOR = HUMAN_VISUAL_DESIGN.coatColor;
+const VIEW_COLOR = HUMAN_VISUAL_DESIGN.flashlightDayColor;
 
 export class Human {
   private patrol: PatrolState;
-  private readonly body: Phaser.GameObjects.Rectangle;
+  private readonly avatar: Phaser.GameObjects.Container;
   private readonly view: Phaser.GameObjects.Triangle;
+  private readonly flashlight: Phaser.GameObjects.Ellipse;
   private readonly label: Phaser.GameObjects.Text;
   private readonly speedPixelsPerSecond: number;
   private readonly dayViewDistance: number;
   private readonly nightViewDistance: number;
   private readonly viewAngleDegrees: number;
   private currentViewDistance: number;
+  private isNightMode = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -39,9 +42,27 @@ export class Human {
       facing: { x: 1, y: 0 },
     };
 
-    this.view = scene.add.triangle(start.x, start.y, 0, 0, 0, 0, 0, 0, VIEW_COLOR, 0.28).setOrigin(0, 0);
-    this.body = scene.add.rectangle(start.x, start.y, 26, 34, HUMAN_COLOR).setStrokeStyle(2, 0x123768);
-    this.label = scene.add.text(start.x, start.y - 30, 'человек', {
+    this.view = scene.add.triangle(start.x, start.y, 0, 0, 0, 0, 0, 0, VIEW_COLOR, getFlashlightAlpha(false)).setOrigin(0, 0);
+
+    const shadow = scene.add.ellipse(0, 17, 34, 12, 0x16223b, 0.18);
+    const legs = scene.add.rectangle(-3, 16, 18, 15, 0x1b315e).setStrokeStyle(1, 0x102444);
+    const body = scene.add.ellipse(0, 1, 28, 38, HUMAN_COLOR).setStrokeStyle(2, 0x123768);
+    const head = scene.add.circle(0, -23, 11, HUMAN_VISUAL_DESIGN.headColor).setStrokeStyle(2, 0x8d5d43);
+    const hat = scene.add.rectangle(0, -35, 25, 7, 0x123768).setStrokeStyle(1, 0x0b203d);
+    const arm = scene.add.rectangle(17, 0, 19, 6, 0x244d91).setStrokeStyle(1, 0x123768);
+    this.flashlight = scene.add.ellipse(29, 0, 16, 8, 0xfff0a8).setStrokeStyle(2, 0x7c4d2b);
+
+    this.avatar = scene.add.container(start.x, start.y, [
+      shadow,
+      legs,
+      body,
+      head,
+      hat,
+      arm,
+      this.flashlight,
+    ]);
+
+    this.label = scene.add.text(start.x, start.y - 45, 'прохожий', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '12px',
       color: '#102a4a',
@@ -53,20 +74,27 @@ export class Human {
 
   update(deltaMs: number): void {
     this.patrol = advancePatrol(this.patrol, (this.speedPixelsPerSecond * deltaMs) / 1000);
-    this.body.setPosition(this.patrol.x, this.patrol.y);
-    this.label.setPosition(this.patrol.x, this.patrol.y - 30);
+    this.avatar.setPosition(this.patrol.x, this.patrol.y);
+    this.label.setPosition(this.patrol.x, this.patrol.y - 45);
+    const facing = this.patrol.facing ?? { x: 1, y: 0 };
+    this.avatar.setRotation(Math.atan2(facing.y, facing.x));
     this.redrawViewCone();
   }
 
   setNightMode(enabled: boolean): void {
+    this.isNightMode = enabled;
     this.currentViewDistance = enabled ? this.nightViewDistance : this.dayViewDistance;
-    this.view.setFillStyle(enabled ? 0xffd45c : VIEW_COLOR, enabled ? 0.36 : 0.28);
+    this.view.setFillStyle(
+      enabled ? HUMAN_VISUAL_DESIGN.flashlightNightColor : HUMAN_VISUAL_DESIGN.flashlightDayColor,
+      getFlashlightAlpha(enabled),
+    );
+    this.flashlight.setFillStyle(enabled ? 0xfff0a8 : 0xffd1a6, enabled ? 1 : 0.86);
     this.redrawViewCone();
   }
 
   destroy(): void {
     this.view.destroy();
-    this.body.destroy();
+    this.avatar.destroy(true);
     this.label.destroy();
   }
 
@@ -95,5 +123,9 @@ export class Human {
 
     this.view.setTo(0, 0, left.x - this.patrol.x, left.y - this.patrol.y, right.x - this.patrol.x, right.y - this.patrol.y);
     this.view.setPosition(this.patrol.x, this.patrol.y);
+    this.view.setFillStyle(
+      this.isNightMode ? HUMAN_VISUAL_DESIGN.flashlightNightColor : HUMAN_VISUAL_DESIGN.flashlightDayColor,
+      getFlashlightAlpha(this.isNightMode),
+    );
   }
 }
