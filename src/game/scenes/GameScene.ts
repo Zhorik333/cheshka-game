@@ -16,6 +16,7 @@ import { configureTelegramBackButton, getTelegramBackButton } from '../telegram/
 import { shareGameResult } from '../telegram/shareResult';
 import { createPosterStates } from '../systems/posterLayout';
 import { getResultRank } from '../systems/resultRank';
+import { createGameplayTapBlockers, isGameplayTap } from '../systems/tapTarget';
 import { distance, type Point } from '../utils/movement';
 
 const POSTER_COLLECTION_RADIUS = 34;
@@ -154,11 +155,11 @@ export class GameScene extends Phaser.Scene {
     }).setDepth(200);
     this.updateDangerIndicator();
 
+    const tapBlockers = createGameplayTapBlockers(width, height, import.meta.env.DEV);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-      const dashButtonCenter = { x: width - 78, y: height - 92 };
-      const tappedDashButton = distance(dashButtonCenter, { x: pointer.worldX, y: pointer.worldY }) <= 56;
-      if (!this.catchState.ended && !tappedDashButton) {
-        this.cat?.setTarget({ x: pointer.worldX, y: pointer.worldY });
+      const tapPoint = { x: pointer.worldX, y: pointer.worldY };
+      if (!this.catchState.ended && isGameplayTap(tapPoint, tapBlockers)) {
+        this.cat?.setTarget(tapPoint);
       }
     });
 
