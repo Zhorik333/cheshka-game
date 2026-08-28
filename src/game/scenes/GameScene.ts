@@ -8,6 +8,7 @@ import { evaluateDayClearBonus } from '../systems/dayClearBonus';
 import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashReady, performDash, type DashState } from '../systems/dash';
 import { getDetectionDangerLevel, isCatDetected, type DetectionDangerLevel } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
+import { FIRST_LEVEL_DESIGN, getFirstLevelBushes, getFirstLevelHumanPatrols, type LevelDecoration, type LevelPath } from '../systems/levelDesign';
 import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { getPhaseObjective } from '../systems/phaseObjective';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
@@ -511,14 +512,9 @@ export class GameScene extends Phaser.Scene {
     const difficulty = getCycleDifficulty(this.dayNight.cycle);
     const speed = difficulty.humanSpeedMultiplier;
     const nightView = difficulty.nightViewMultiplier;
-    const humanConfigs = [
-      { path: [{ x: 250, y: 180 }, { x: 720, y: 180 }], speed: 80, dayView: 115, nightView: 190 },
-      { path: [{ x: 760, y: 470 }, { x: 260, y: 470 }], speed: 70, dayView: 105, nightView: 175 },
-      { path: [{ x: 220, y: 585 }, { x: 790, y: 585 }], speed: 78, dayView: 110, nightView: 185 },
-      { path: [{ x: 880, y: 160 }, { x: 880, y: 520 }], speed: 72, dayView: 105, nightView: 180 },
-    ];
+    const levelPatrols = getFirstLevelHumanPatrols(difficulty.humanCount);
 
-    this.humans = humanConfigs.slice(0, difficulty.humanCount).map((config) => new Human(
+    this.humans = levelPatrols.map((config) => new Human(
       this,
       config.path,
       config.speed * speed,
@@ -676,49 +672,86 @@ export class GameScene extends Phaser.Scene {
   private drawBudvaYard(width: number, height: number): void {
     this.add.rectangle(width / 2, height / 2, width, height, 0xd8c49a);
 
-    this.add.rectangle(width / 2, 35, width, 70, 0x9c8f7b);
-    this.add.text(width / 2, 35, 'каменная стена Будвы', {
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '16px',
-      color: '#f5ead4',
-    }).setOrigin(0.5);
-
-    this.add.rectangle(90, height / 2, 120, 420, 0xc97854);
-    this.add.text(90, height / 2, 'дом', {
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '22px',
-      color: '#fff0df',
-    }).setOrigin(0.5);
-
-    this.add.rectangle(width - 145, height / 2 - 30, 190, 150, 0xe6b56f).setStrokeStyle(3, 0x7a5132);
-    this.add.text(width - 145, height / 2 - 30, 'кафе', {
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '24px',
-      color: '#563a24',
-    }).setOrigin(0.5);
-
-    this.add.rectangle(width / 2, height - 55, width, 110, 0x6db7c8);
-    this.add.text(width / 2, height - 73, 'море / набережная', {
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '18px',
-      color: '#ffffff',
-    }).setOrigin(0.5);
-
-    this.bushes = [
-      { x: 330, y: 290, radius: 42 },
-      { x: 515, y: 180, radius: 36 },
-      { x: 620, y: 390, radius: 48 },
-    ];
-
-    for (const bush of this.bushes) {
-      this.add.circle(bush.x, bush.y, bush.radius, 0x3f8f48);
+    for (const path of FIRST_LEVEL_DESIGN.paths) {
+      this.drawStonePath(path);
     }
 
-    this.add.rectangle(430, 340, 120, 52, 0x5d6f8f).setStrokeStyle(2, 0x28364e);
-    this.add.text(430, 340, 'машина', {
-      fontFamily: 'Arial, sans-serif',
-      fontSize: '14px',
-      color: '#ffffff',
-    }).setOrigin(0.5);
+    for (const zone of FIRST_LEVEL_DESIGN.zones) {
+      const shape = this.add.rectangle(zone.x, zone.y, zone.width, zone.height, zone.fill);
+      if (zone.stroke !== undefined) {
+        shape.setStrokeStyle(3, zone.stroke);
+      }
+      this.add.text(zone.x, zone.y, zone.label, {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: zone.id === 'old-wall' ? '16px' : '18px',
+        color: zone.labelColor,
+        align: 'center',
+      }).setOrigin(0.5);
+    }
+
+    this.drawLevelDecorations(FIRST_LEVEL_DESIGN.decorations);
+
+    this.bushes = getFirstLevelBushes();
+    for (const bush of this.bushes) {
+      this.add.circle(bush.x, bush.y, bush.radius + 8, 0x2d6e37, 0.18);
+      this.add.circle(bush.x - 9, bush.y + 4, bush.radius * 0.74, 0x3f8f48);
+      this.add.circle(bush.x + 11, bush.y - 3, bush.radius * 0.68, 0x4da65a);
+      this.add.circle(bush.x + 1, bush.y + 12, bush.radius * 0.56, 0x2f7d3b);
+      this.add.text(bush.x, bush.y + bush.radius + 14, 'укрытие', {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '12px',
+        color: '#21552a',
+        backgroundColor: 'rgba(255,255,255,0.54)',
+        padding: { x: 3, y: 1 },
+      }).setOrigin(0.5);
+    }
+  }
+
+  private drawStonePath(path: LevelPath): void {
+    const graphics = this.add.graphics();
+    graphics.lineStyle(path.width, path.fill, path.alpha);
+    const [start, ...points] = path.points;
+    if (!start) {
+      return;
+    }
+    graphics.beginPath();
+    graphics.moveTo(start.x, start.y);
+    for (const point of points) {
+      graphics.lineTo(point.x, point.y);
+    }
+    graphics.strokePath();
+
+    graphics.lineStyle(2, 0xfff3dc, 0.34);
+    graphics.beginPath();
+    graphics.moveTo(start.x, start.y);
+    for (const point of points) {
+      graphics.lineTo(point.x, point.y);
+    }
+    graphics.strokePath();
+  }
+
+  private drawLevelDecorations(decorations: LevelDecoration[]): void {
+    for (const decoration of decorations) {
+      if (decoration.kind === 'circle') {
+        const circle = this.add.circle(decoration.x, decoration.y, decoration.radius ?? 16, decoration.fill);
+        if (decoration.stroke !== undefined) {
+          circle.setStrokeStyle(2, decoration.stroke);
+        }
+      } else {
+        const rect = this.add.rectangle(decoration.x, decoration.y, decoration.width ?? 40, decoration.height ?? 40, decoration.fill);
+        if (decoration.stroke !== undefined) {
+          rect.setStrokeStyle(2, decoration.stroke);
+        }
+      }
+
+      if (decoration.label) {
+        this.add.text(decoration.x, decoration.y, decoration.label, {
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '13px',
+          color: decoration.labelColor ?? '#ffffff',
+          align: 'center',
+        }).setOrigin(0.5);
+      }
+    }
   }
 }

@@ -7,8 +7,8 @@ describe('createPosterStates', () => {
 
     expect(posters).toHaveLength(2);
     expect(posters).toEqual([
-      { id: 'poster-1', x: 240, y: 86, collected: false },
-      { id: 'poster-2', x: 505, y: 88, collected: false },
+      { id: 'poster-1', x: 238, y: 92, collected: false },
+      { id: 'poster-2', x: 505, y: 93, collected: false },
     ]);
   });
 
