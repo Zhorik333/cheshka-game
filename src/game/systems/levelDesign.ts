@@ -39,6 +39,24 @@ export type LevelBush = Point & {
   radius: number;
 };
 
+export type LevelSignpost = Point & {
+  id: string;
+  role: 'tutorial-safe-pocket' | 'timing-crossing' | 'risk-reward-shortcut' | 'night-hideout';
+  label: string;
+  color: number;
+};
+
+export type LevelMischiefProp = Point & {
+  id: string;
+  kind: 'fish-cart' | 'poster-board' | 'laundry' | 'trash-bin' | 'cafe-menu' | 'paw-trail';
+  label?: string;
+  width?: number;
+  height?: number;
+  radius?: number;
+  fill: number;
+  stroke?: number;
+};
+
 export type LevelHumanPatrol = {
   id: string;
   path: Point[];
@@ -53,6 +71,8 @@ export type FirstLevelDesign = {
   zones: LevelZone[];
   paths: LevelPath[];
   bushes: LevelBush[];
+  signposts: LevelSignpost[];
+  mischiefProps: LevelMischiefProp[];
   decorations: LevelDecoration[];
   humanPatrols: LevelHumanPatrol[];
   posterSpawnPoints: Point[];
@@ -78,6 +98,22 @@ export const FIRST_LEVEL_DESIGN: FirstLevelDesign = {
     { id: 'ivy-bush-wall', x: 525, y: 160, radius: 38 },
     { id: 'lavender-bush-cafe', x: 625, y: 405, radius: 48 },
     { id: 'palm-shadow', x: 245, y: 500, radius: 34 },
+    { id: 'oleander-night-pocket', x: 815, y: 520, radius: 36 },
+  ],
+  signposts: [
+    { id: 'start-pocket-sign', role: 'tutorial-safe-pocket', label: 'тихий старт', x: 398, y: 548, color: 0x2f7d3b },
+    { id: 'wall-crossing-sign', role: 'timing-crossing', label: 'жди проход', x: 505, y: 222, color: 0xc77700 },
+    { id: 'sea-shortcut-sign', role: 'risk-reward-shortcut', label: 'быстрый риск', x: 548, y: 636, color: 0x6d4c9f },
+    { id: 'night-hideout-sign', role: 'night-hideout', label: 'нырнуть в куст', x: 760, y: 514, color: 0x2e7d32 },
+  ],
+  mischiefProps: [
+    { id: 'start-paw-trail', kind: 'paw-trail', x: 292, y: 546, width: 128, height: 30, fill: 0x7c4d2b },
+    { id: 'wall-poster-board-left', kind: 'poster-board', x: 238, y: 92, width: 76, height: 34, fill: 0xfff1a0, stroke: 0x7d6824, label: 'розыск' },
+    { id: 'wall-poster-board-center', kind: 'poster-board', x: 505, y: 93, width: 82, height: 34, fill: 0xfff1a0, stroke: 0x7d6824, label: 'листовки' },
+    { id: 'fish-cart-risk', kind: 'fish-cart', x: 690, y: 544, width: 92, height: 46, fill: 0x8ab9c8, stroke: 0x3d6f7d, label: 'рыба' },
+    { id: 'cafe-menu-lure', kind: 'cafe-menu', x: 760, y: 345, width: 52, height: 64, fill: 0x3f2a1d, stroke: 0xfff3dc, label: 'меню' },
+    { id: 'alley-trash-bin', kind: 'trash-bin', x: 184, y: 452, width: 42, height: 46, fill: 0x52735a, stroke: 0x25412d, label: 'бак' },
+    { id: 'laundry-bait', kind: 'laundry', x: 340, y: 132, width: 138, height: 18, fill: 0xffffff, stroke: 0xb05c7a, label: 'бельё' },
   ],
   decorations: [
     { id: 'fountain', kind: 'circle', x: 500, y: 333, radius: 34, fill: 0x93cddd, stroke: 0x4e8fa0, label: 'фонтан', labelColor: '#ffffff' },
@@ -121,4 +157,12 @@ export function getFirstLevelHumanPatrols(count: number): LevelHumanPatrol[] {
 
 export function getFirstLevelBushes(): LevelBush[] {
   return FIRST_LEVEL_DESIGN.bushes.map((bush) => ({ ...bush }));
+}
+
+export function getFirstLevelSignposts(): LevelSignpost[] {
+  return FIRST_LEVEL_DESIGN.signposts.map((signpost) => ({ ...signpost }));
+}
+
+export function getFirstLevelMischiefProps(): LevelMischiefProp[] {
+  return FIRST_LEVEL_DESIGN.mischiefProps.map((prop) => ({ ...prop }));
 }

@@ -9,7 +9,15 @@ import { evaluateDayClearBonus } from '../systems/dayClearBonus';
 import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashReady, performDash, type DashState } from '../systems/dash';
 import { getDetectionDangerLevel, isCatDetected, type DetectionDangerLevel } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
-import { FIRST_LEVEL_DESIGN, getFirstLevelBushes, getFirstLevelHumanPatrols, type LevelDecoration, type LevelPath } from '../systems/levelDesign';
+import {
+  FIRST_LEVEL_DESIGN,
+  getFirstLevelBushes,
+  getFirstLevelHumanPatrols,
+  type LevelDecoration,
+  type LevelMischiefProp,
+  type LevelPath,
+  type LevelSignpost,
+} from '../systems/levelDesign';
 import { getEventEffectStyle, getParticleAngles, type EventEffectKind } from '../systems/eventEffects';
 import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { getPhaseObjective } from '../systems/phaseObjective';
@@ -745,6 +753,8 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.drawLevelDecorations(FIRST_LEVEL_DESIGN.decorations);
+    this.drawMischiefProps(FIRST_LEVEL_DESIGN.mischiefProps);
+    this.drawSignposts(FIRST_LEVEL_DESIGN.signposts);
 
     this.bushes = getFirstLevelBushes();
     for (const bush of this.bushes) {
@@ -783,6 +793,91 @@ export class GameScene extends Phaser.Scene {
       graphics.lineTo(point.x, point.y);
     }
     graphics.strokePath();
+  }
+
+  private drawMischiefProps(props: LevelMischiefProp[]): void {
+    for (const prop of props) {
+      if (prop.kind === 'paw-trail') {
+        this.drawPawTrail(prop);
+        continue;
+      }
+
+      const width = prop.width ?? 44;
+      const height = prop.height ?? 36;
+      const base = this.add.rectangle(prop.x, prop.y, width, height, prop.fill, 0.92)
+        .setStrokeStyle(2, prop.stroke ?? 0x4d2c1d);
+
+      if (prop.kind === 'fish-cart') {
+        this.add.circle(prop.x - width * 0.32, prop.y + height * 0.48, 8, 0x24394a);
+        this.add.circle(prop.x + width * 0.32, prop.y + height * 0.48, 8, 0x24394a);
+        this.add.ellipse(prop.x, prop.y - 5, width * 0.62, height * 0.34, 0xd9f4ff, 0.86);
+      }
+
+      if (prop.kind === 'poster-board') {
+        this.add.rectangle(prop.x, prop.y, width * 0.8, height * 0.62, 0xffef8a, 0.96)
+          .setStrokeStyle(1, 0x7d6824);
+        this.add.text(prop.x, prop.y, '!', {
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '18px',
+          color: '#7d6824',
+        }).setOrigin(0.5);
+      }
+
+      if (prop.kind === 'laundry') {
+        base.setAlpha(0.55);
+        this.add.rectangle(prop.x - 34, prop.y + 10, 32, 24, 0xffd1dc, 0.92).setStrokeStyle(1, 0xb05c7a);
+        this.add.rectangle(prop.x + 8, prop.y + 11, 30, 23, 0xe7f3ff, 0.92).setStrokeStyle(1, 0x6d8fb0);
+        this.add.rectangle(prop.x + 46, prop.y + 10, 26, 22, 0xfff3dc, 0.92).setStrokeStyle(1, 0x9b6d42);
+      }
+
+      if (prop.kind === 'trash-bin') {
+        this.add.rectangle(prop.x, prop.y - height * 0.52, width * 0.8, 8, 0x35513b).setStrokeStyle(1, 0x25412d);
+      }
+
+      if (prop.kind === 'cafe-menu') {
+        this.add.text(prop.x, prop.y, '☕\n?', {
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '16px',
+          color: '#fff3dc',
+          align: 'center',
+        }).setOrigin(0.5);
+      }
+
+      if (prop.label && prop.kind !== 'poster-board') {
+        this.add.text(prop.x, prop.y + height * 0.72, prop.label, {
+          fontFamily: 'Arial, sans-serif',
+          fontSize: '12px',
+          color: '#4d2c1d',
+          backgroundColor: 'rgba(255,255,255,0.5)',
+          padding: { x: 3, y: 1 },
+        }).setOrigin(0.5);
+      }
+    }
+  }
+
+  private drawPawTrail(prop: LevelMischiefProp): void {
+    const width = prop.width ?? 120;
+    const step = width / 4;
+    for (let index = 0; index < 4; index += 1) {
+      const x = prop.x - width / 2 + step * index + 14;
+      const y = prop.y + (index % 2 === 0 ? -5 : 5);
+      this.add.ellipse(x, y, 13, 9, prop.fill, 0.24).setAngle(index % 2 === 0 ? -18 : 18);
+      this.add.circle(x + 7, y - 7, 2.6, prop.fill, 0.22);
+      this.add.circle(x + 2, y - 9, 2.4, prop.fill, 0.22);
+    }
+  }
+
+  private drawSignposts(signposts: LevelSignpost[]): void {
+    for (const sign of signposts) {
+      this.add.circle(sign.x, sign.y, 17, sign.color, 0.22).setStrokeStyle(2, sign.color, 0.7);
+      this.add.text(sign.x, sign.y, sign.label, {
+        fontFamily: 'Arial, sans-serif',
+        fontSize: '13px',
+        color: '#ffffff',
+        backgroundColor: `#${sign.color.toString(16).padStart(6, '0')}`,
+        padding: { x: 5, y: 2 },
+      }).setOrigin(0.5);
+    }
   }
 
   private drawLevelDecorations(decorations: LevelDecoration[]): void {

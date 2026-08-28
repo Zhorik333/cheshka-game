@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { distance } from '../utils/movement';
-import { FIRST_LEVEL_DESIGN, getFirstLevelBushes, getFirstLevelHumanPatrols, getFirstLevelPosterSpawnPoints } from './levelDesign';
+import {
+  FIRST_LEVEL_DESIGN,
+  getFirstLevelBushes,
+  getFirstLevelHumanPatrols,
+  getFirstLevelMischiefProps,
+  getFirstLevelPosterSpawnPoints,
+  getFirstLevelSignposts,
+} from './levelDesign';
 
 describe('first level design', () => {
   it('has a readable first-cycle route: start, five posters, two patrols and hiding spots', () => {
@@ -29,10 +36,37 @@ describe('first level design', () => {
     expect(patrols[3].id).toBe('side-street-neighbor');
   });
 
-  it('returns defensive copies of mutable level points', () => {
+  it('marks the level with clear stealth beats inspired by mobile stealth games', () => {
+    const signs = getFirstLevelSignposts();
+
+    expect(signs.map((sign) => sign.role)).toEqual([
+      'tutorial-safe-pocket',
+      'timing-crossing',
+      'risk-reward-shortcut',
+      'night-hideout',
+    ]);
+    expect(signs.every((sign) => sign.label.length <= 24)).toBe(true);
+  });
+
+  it('adds readable mischief props near objectives without blocking the start', () => {
+    const props = getFirstLevelMischiefProps();
+
+    expect(props.length).toBeGreaterThanOrEqual(6);
+    expect(props.some((prop) => prop.kind === 'fish-cart')).toBe(true);
+    expect(props.some((prop) => prop.kind === 'poster-board')).toBe(true);
+    expect(props.every((prop) => distance(FIRST_LEVEL_DESIGN.playerSpawn, prop) > 60)).toBe(true);
+  });
+
+  it('returns defensive copies of mutable level data', () => {
     const posters = getFirstLevelPosterSpawnPoints();
     posters[0].x = -999;
+    const signposts = getFirstLevelSignposts();
+    signposts[0].label = 'mutated';
+    const props = getFirstLevelMischiefProps();
+    props[0].x = -999;
 
     expect(getFirstLevelPosterSpawnPoints()[0].x).toBe(238);
+    expect(getFirstLevelSignposts()[0].label).toBe('тихий старт');
+    expect(getFirstLevelMischiefProps()[0].x).toBe(292);
   });
 });
