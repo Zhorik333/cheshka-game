@@ -10,6 +10,7 @@ import { createDashState, getDashCooldownRatio, getDashCooldownSeconds, isDashRe
 import { getDetectionDangerLevel, isCatDetected, type DetectionDangerLevel } from '../systems/detection';
 import { getCycleDifficulty } from '../systems/difficulty';
 import { FIRST_LEVEL_DESIGN, getFirstLevelBushes, getFirstLevelHumanPatrols, type LevelDecoration, type LevelPath } from '../systems/levelDesign';
+import { getEventEffectStyle, getParticleAngles, type EventEffectKind } from '../systems/eventEffects';
 import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { getPhaseObjective } from '../systems/phaseObjective';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
@@ -230,6 +231,9 @@ export class GameScene extends Phaser.Scene {
     }
 
     const message = update.event === 'entered' ? 'Чешка спряталась 🌿' : 'Чешка снова на виду!';
+    if (update.event === 'entered') {
+      this.showEventEffect('hide', this.cat.position.x, this.cat.position.y);
+    }
     this.showPopup(this.cat.position.x, this.cat.position.y - 68, message, status.color);
   }
 
@@ -309,6 +313,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.cat.snapTo(result.position);
+    this.showEventEffect('dash', result.position.x, result.position.y);
     this.showPopup(result.position.x, result.position.y - 54, 'Прыг-скок! ✦', '#6d4c9f');
   }
 
@@ -405,6 +410,9 @@ export class GameScene extends Phaser.Scene {
 
     for (const posterId of result.collectedIds) {
       const sprite = this.posterSprites.get(posterId);
+      if (sprite) {
+        this.showEventEffect('posterCollect', sprite.paper.x, sprite.paper.y);
+      }
       sprite?.paper.destroy();
       sprite?.glow.destroy();
       sprite?.mark.destroy();
@@ -433,6 +441,7 @@ export class GameScene extends Phaser.Scene {
     this.dayClearAwarded = true;
     this.score += bonus.bonusScore;
     this.dayNight = fastForwardToPhaseEnd(this.dayNight);
+    this.showEventEffect('dayClear', CAT_RESPAWN.x, CAT_RESPAWN.y - 48);
     this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 128, `${bonus.label}  Скоро ночь!`, '#6d4c9f');
   }
 
@@ -456,6 +465,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.score = Math.max(0, this.score - 20);
+    this.showEventEffect('caught', this.cat.position.x, this.cat.position.y);
     this.updateHud();
 
     if (this.catchState.ended) {
@@ -597,6 +607,36 @@ export class GameScene extends Phaser.Scene {
       duration: 750,
       onComplete: () => popup.destroy(),
     });
+  }
+
+  private showEventEffect(kind: EventEffectKind, x: number, y: number): void {
+    const style = getEventEffectStyle(kind);
+    const ring = this.add.circle(x, y, style.startRadius, style.color, 0)
+      .setStrokeStyle(4, style.color, style.alpha)
+      .setDepth(218);
+
+    this.tweens.add({
+      targets: ring,
+      radius: style.endRadius,
+      alpha: 0,
+      duration: style.durationMs,
+      ease: 'Sine.easeOut',
+      onComplete: () => ring.destroy(),
+    });
+
+    for (const angle of getParticleAngles(style.particles)) {
+      const particle = this.add.circle(x, y, 4, style.color, style.alpha).setDepth(219);
+      this.tweens.add({
+        targets: particle,
+        x: x + Math.cos(angle) * style.endRadius * 0.55,
+        y: y + Math.sin(angle) * style.endRadius * 0.55,
+        alpha: 0,
+        scale: 0.35,
+        duration: style.durationMs,
+        ease: 'Sine.easeOut',
+        onComplete: () => particle.destroy(),
+      });
+    }
   }
 
   private showHomeResult(): void {
