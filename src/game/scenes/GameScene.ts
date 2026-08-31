@@ -23,6 +23,7 @@ import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { getPhaseObjective } from '../systems/phaseObjective';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
+import { getSoundCue, type SoundEventKind } from '../systems/soundDesign';
 import { configureTelegramBackButton, getTelegramBackButton } from '../telegram/backButton';
 import { shareGameResult } from '../telegram/shareResult';
 import { createPosterStates } from '../systems/posterLayout';
@@ -92,6 +93,8 @@ export class GameScene extends Phaser.Scene {
   private dashState: DashState = createDashState(DASH_CONFIG);
   private catIsHidden = false;
   private activeJoystick?: ActiveJoystick;
+  private audioContext?: AudioContext;
+  private audioUnlocked = false;
   private posterCombo: PosterComboState = createPosterComboState(POSTER_COMBO_WINDOW_MS);
   private catchState: CatchState = {
     catches: 0,
@@ -136,6 +139,7 @@ export class GameScene extends Phaser.Scene {
     this.dashCooldownText = undefined;
     this.dashState = createDashState(DASH_CONFIG);
     this.activeJoystick = undefined;
+    this.audioUnlocked = false;
     this.posterCombo = createPosterComboState(POSTER_COMBO_WINDOW_MS);
     this.catchState = { catches: 0, maxCatches: 3, invulnerableUntilMs: 0, ended: false };
 
@@ -182,6 +186,7 @@ export class GameScene extends Phaser.Scene {
 
     const tapBlockers = createGameplayTapBlockers(width, height, import.meta.env.DEV);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      this.unlockAudio();
       const tapPoint = { x: pointer.worldX, y: pointer.worldY };
       if (this.catchState.ended || !isGameplayTap(tapPoint, tapBlockers)) {
         return;
@@ -300,6 +305,7 @@ export class GameScene extends Phaser.Scene {
 
     const message = update.event === 'entered' ? 'Чешка спряталась 🌿' : 'Чешка снова на виду!';
     if (update.event === 'entered') {
+      this.playSound('hide');
       this.showEventEffect('hide', this.cat.position.x, this.cat.position.y);
     }
     this.showPopup(this.cat.position.x, this.cat.position.y - 68, message, status.color);
@@ -381,6 +387,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.cat.snapTo(result.position);
+    this.playSound('dash');
     this.showEventEffect('dash', result.position.x, result.position.y);
     this.showPopup(result.position.x, result.position.y - 54, 'Прыг-скок! ✦', '#6d4c9f');
   }
@@ -409,7 +416,10 @@ export class GameScene extends Phaser.Scene {
       align: 'center',
     }).setOrigin(0.5).setDepth(211);
 
-    this.dashButton.on('pointerdown', () => this.tryDash(this.time.now));
+    this.dashButton.on('pointerdown', () => {
+      this.unlockAudio();
+      this.tryDash(this.time.now);
+    });
     this.updateDashButton(this.time.now);
   }
 
@@ -447,6 +457,7 @@ export class GameScene extends Phaser.Scene {
       if (previousPhase === 'night' && this.dayNight.phase === 'toDay') {
         this.survivedNightCount += 1;
         this.score += 50;
+        this.playSound('phaseChange');
         this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 112, '+50 за ночь!', '#2e7d32');
       }
       if (this.dayNight.phase === 'day') {
@@ -487,6 +498,7 @@ export class GameScene extends Phaser.Scene {
       this.posterSprites.delete(posterId);
     }
 
+    this.playSound('posterCollect');
     const scoreLabel = combo.bonusScore > 0 ? `+${result.scoreDelta + combo.bonusScore}  ${combo.label}` : `+${result.scoreDelta}`;
     this.showPopup(this.cat.position.x, this.cat.position.y - 34, scoreLabel, combo.bonusScore > 0 ? '#6d4c9f' : '#2e7d32');
     this.awardDayClearBonusIfReady();
@@ -509,6 +521,7 @@ export class GameScene extends Phaser.Scene {
     this.dayClearAwarded = true;
     this.score += bonus.bonusScore;
     this.dayNight = fastForwardToPhaseEnd(this.dayNight);
+    this.playSound('dayClear');
     this.showEventEffect('dayClear', CAT_RESPAWN.x, CAT_RESPAWN.y - 48);
     this.showPopup(CAT_RESPAWN.x, CAT_RESPAWN.y - 128, `${bonus.label}  Скоро ночь!`, '#6d4c9f');
   }
@@ -533,6 +546,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     this.score = Math.max(0, this.score - 20);
+    this.playSound('caught');
     this.showEventEffect('caught', this.cat.position.x, this.cat.position.y);
     this.updateHud();
 
@@ -657,6 +671,52 @@ export class GameScene extends Phaser.Scene {
         this.phaseNotice = undefined;
       },
     });
+  }
+
+  private unlockAudio(): void {
+    if (this.audioUnlocked) {
+      return;
+    }
+
+    const AudioContextCtor = window.AudioContext
+      ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+
+    if (!AudioContextCtor) {
+      return;
+    }
+
+    this.audioContext ??= new AudioContextCtor();
+    void this.audioContext.resume();
+    this.audioUnlocked = true;
+  }
+
+  private playSound(kind: SoundEventKind): void {
+    this.unlockAudio();
+
+    if (!this.audioContext || this.audioContext.state === 'closed') {
+      return;
+    }
+
+    const cue = getSoundCue(kind);
+    const now = this.audioContext.currentTime;
+
+    for (const tone of cue.tones) {
+      const oscillator = this.audioContext.createOscillator();
+      const gain = this.audioContext.createGain();
+      const startsAt = now + tone.startDelayMs / 1000;
+      const endsAt = startsAt + tone.durationMs / 1000;
+
+      oscillator.type = tone.type;
+      oscillator.frequency.setValueAtTime(tone.frequencyHz, startsAt);
+      gain.gain.setValueAtTime(0, startsAt);
+      gain.gain.linearRampToValueAtTime(tone.volume, startsAt + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, endsAt);
+
+      oscillator.connect(gain);
+      gain.connect(this.audioContext.destination);
+      oscillator.start(startsAt);
+      oscillator.stop(endsAt + 0.02);
+    }
   }
 
   private showPopup(x: number, y: number, text: string, color: string): void {
