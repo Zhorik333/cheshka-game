@@ -19,12 +19,14 @@ import {
   type LevelSignpost,
 } from '../systems/levelDesign';
 import { getEventEffectStyle, getParticleAngles, type EventEffectKind } from '../systems/eventEffects';
+import { getGameplayUILayout, type GameplayUILayout } from '../systems/gameplayUILayout';
 import { getHidingStatus, updateHidingStatus } from '../systems/hidingStatus';
 import { getPhaseObjective } from '../systems/phaseObjective';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
 import { getSoundCue, type SoundEventKind } from '../systems/soundDesign';
 import { getSoundToggleLabel, loadSoundEnabled, toggleSoundEnabled } from '../systems/soundSettings';
+import { getCameraFollowConfig, getCatMovementBounds, WORLD_BOUNDS } from '../systems/viewport';
 import { configureTelegramBackButton, getTelegramBackButton } from '../telegram/backButton';
 import { shareGameResult } from '../telegram/shareResult';
 import { createPosterStates } from '../systems/posterLayout';
@@ -34,7 +36,7 @@ import { getVirtualJoystickFrame, type VirtualJoystickConfig } from '../systems/
 import { distance, type Point } from '../utils/movement';
 
 const POSTER_COLLECTION_RADIUS = 34;
-const CAT_RESPAWN: Point = { x: 520, y: 585 };
+const CAT_RESPAWN: Point = { ...FIRST_LEVEL_DESIGN.playerSpawn };
 const DAY_NIGHT_CONFIG = {
   dayMs: 60_000,
   nightMs: 45_000,
@@ -99,6 +101,7 @@ export class GameScene extends Phaser.Scene {
   private soundEnabled = true;
   private soundButton?: Phaser.GameObjects.Rectangle;
   private soundButtonText?: Phaser.GameObjects.Text;
+  private gameplayUILayout: GameplayUILayout = getGameplayUILayout({ width: 390, height: 844 }, false);
   private posterCombo: PosterComboState = createPosterComboState(POSTER_COMBO_WINDOW_MS);
   private catchState: CatchState = {
     catches: 0,
@@ -119,6 +122,7 @@ export class GameScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, cleanupBackButton);
 
     const { width, height } = this.scale;
+    this.gameplayUILayout = getGameplayUILayout({ width, height }, import.meta.env.DEV);
 
     this.score = 0;
     this.collectedPosterCount = 0;
@@ -150,45 +154,50 @@ export class GameScene extends Phaser.Scene {
     this.posterCombo = createPosterComboState(POSTER_COMBO_WINDOW_MS);
     this.catchState = { catches: 0, maxCatches: 3, invulnerableUntilMs: 0, ended: false };
 
-    this.drawBudvaYard(width, height);
+    this.cameras.main.setBounds(WORLD_BOUNDS.x, WORLD_BOUNDS.y, WORLD_BOUNDS.width, WORLD_BOUNDS.height);
+    this.drawBudvaYard(WORLD_BOUNDS.width, WORLD_BOUNDS.height);
     this.createPosters();
     this.createHumans();
     this.nightOverlay = this.add.rectangle(width / 2, height / 2, width, height, 0x09142f, 0)
       .setDepth(40)
-      .setVisible(false);
+      .setVisible(false)
+      .setScrollFactor(0);
 
-    this.cat = new Cat(this, CAT_RESPAWN);
+    this.cat = new Cat(this, CAT_RESPAWN, 220, getCatMovementBounds(22));
+    const cameraFollow = getCameraFollowConfig();
+    this.cameras.main.startFollow(this.cat.followTarget, false, cameraFollow.lerpX, cameraFollow.lerpY);
+    this.cameras.main.setDeadzone(cameraFollow.deadzone.width, cameraFollow.deadzone.height);
     this.scoreText = this.add.text(24, 20, '', {
       fontFamily: 'Arial, sans-serif',
-      fontSize: '20px',
+      fontSize: `${this.gameplayUILayout.hudFontPx}px`,
       color: '#2f241d',
       backgroundColor: 'rgba(255,255,255,0.72)',
       padding: { x: 10, y: 7 },
-    }).setDepth(200);
+    }).setDepth(200).setScrollFactor(0);
     this.updateHud();
-    this.objectiveText = this.add.text(24, 62, '', {
+    this.objectiveText = this.add.text(24, 86, '', {
       fontFamily: 'Arial, sans-serif',
-      fontSize: '18px',
+      fontSize: `${this.gameplayUILayout.objectiveFontPx}px`,
       color: '#4d2c1d',
       backgroundColor: 'rgba(255,255,255,0.72)',
       padding: { x: 10, y: 6 },
-    }).setDepth(200);
+    }).setDepth(200).setScrollFactor(0);
     this.updateObjectiveIndicator();
-    this.hidingText = this.add.text(24, 104, '', {
+    this.hidingText = this.add.text(24, 126, '', {
       fontFamily: 'Arial, sans-serif',
-      fontSize: '18px',
+      fontSize: `${this.gameplayUILayout.objectiveFontPx}px`,
       color: '#b3261e',
       backgroundColor: 'rgba(255,255,255,0.72)',
       padding: { x: 10, y: 6 },
-    }).setDepth(200);
+    }).setDepth(200).setScrollFactor(0);
     this.updateHidingIndicator(false);
-    this.dangerText = this.add.text(24, 146, '', {
+    this.dangerText = this.add.text(24, 166, '', {
       fontFamily: 'Arial, sans-serif',
-      fontSize: '18px',
+      fontSize: `${this.gameplayUILayout.objectiveFontPx}px`,
       color: '#2e7d32',
       backgroundColor: 'rgba(255,255,255,0.72)',
       padding: { x: 10, y: 6 },
-    }).setDepth(200);
+    }).setDepth(200).setScrollFactor(0);
     this.updateDangerIndicator();
 
     const tapBlockers = createGameplayTapBlockers(width, height, import.meta.env.DEV);
@@ -229,22 +238,24 @@ export class GameScene extends Phaser.Scene {
     this.createDashButton(width, height);
     this.createSoundToggle(width);
 
-    this.add.text(width / 2, height - 28, 'Веди пальцем по экрану: невидимый джойстик управляет Чешкой ♪', {
+    this.add.text(width / 2, height - 28, this.gameplayUILayout.footerHint, {
       fontFamily: 'Arial, sans-serif',
-      fontSize: '18px',
+      fontSize: `${this.gameplayUILayout.footerFontPx}px`,
       color: '#4d2c1d',
       backgroundColor: 'rgba(255,255,255,0.72)',
       padding: { x: 8, y: 5 },
-    }).setOrigin(0.5);
+      align: 'center',
+      wordWrap: { width: this.gameplayUILayout.footerWrapWidth },
+    }).setOrigin(0.5).setScrollFactor(0);
 
     if (import.meta.env.DEV) {
-      this.add.text(width - 24, height - 28, 'Dev: N = следующая фаза', {
+      this.add.text(width - 24, height - 28, this.gameplayUILayout.devHint, {
         fontFamily: 'Arial, sans-serif',
         fontSize: '15px',
         color: '#5d4037',
         backgroundColor: 'rgba(255,255,255,0.64)',
         padding: { x: 7, y: 4 },
-      }).setOrigin(1, 0.5);
+      }).setOrigin(1, 0.5).setScrollFactor(0);
     }
   }
 
@@ -404,25 +415,27 @@ export class GameScene extends Phaser.Scene {
     this.dashButton = this.add.circle(width - 78, height - 92, 43, 0x6d4c9f, 0.88)
       .setStrokeStyle(4, 0x3b255d)
       .setDepth(210)
+      .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
 
     this.dashCooldownFill = this.add.circle(width - 78, height - 92, 38, 0x20172b, 0.68)
       .setDepth(210.5)
-      .setVisible(false);
+      .setVisible(false)
+      .setScrollFactor(0);
 
     this.add.text(width - 78, height - 98, 'Рывок', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '17px',
       color: '#ffffff',
       align: 'center',
-    }).setOrigin(0.5).setDepth(211);
+    }).setOrigin(0.5).setDepth(211).setScrollFactor(0);
 
     this.dashCooldownText = this.add.text(width - 78, height - 76, 'готов', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '12px',
       color: '#eadcff',
       align: 'center',
-    }).setOrigin(0.5).setDepth(211);
+    }).setOrigin(0.5).setDepth(211).setScrollFactor(0);
 
     this.dashButton.on('pointerdown', () => {
       this.unlockAudio();
@@ -440,16 +453,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private createSoundToggle(width: number): void {
-    this.soundButton = this.add.rectangle(width - 82, 33, 132, 42, 0x4d2c1d, 0.84)
+    const buttonWidth = this.gameplayUILayout.soundButton.width;
+    const buttonHeight = this.gameplayUILayout.soundButton.height;
+    const x = width - 16 - buttonWidth / 2;
+    this.soundButton = this.add.rectangle(x, 33, buttonWidth, buttonHeight, 0x4d2c1d, 0.84)
       .setStrokeStyle(3, 0xfff3dc)
       .setDepth(215)
+      .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
-    this.soundButtonText = this.add.text(width - 82, 33, getSoundToggleLabel(this.soundEnabled), {
+    this.soundButtonText = this.add.text(x, 33, getSoundToggleLabel(this.soundEnabled), {
       fontFamily: 'Arial, sans-serif',
       fontSize: '15px',
       color: '#ffffff',
       align: 'center',
-    }).setOrigin(0.5).setDepth(216).setInteractive({ useHandCursor: true });
+    }).setOrigin(0.5).setDepth(216).setScrollFactor(0).setInteractive({ useHandCursor: true });
 
     const toggle = () => this.toggleSound();
     this.soundButton.on('pointerdown', toggle);
@@ -614,7 +631,7 @@ export class GameScene extends Phaser.Scene {
 
     const seconds = Math.ceil(this.dayNight.remainingMs / 1000);
     this.scoreText?.setText(
-      `${getPhaseLabel(this.dayNight.phase)}: ${seconds}   Цикл: ${this.dayNight.cycle}   Рейтинг: ${this.score}   Рекорд: ${this.bestScore}   Объявления: ${this.collectedPosterCount}/${this.posters.length}   Свобода: ${paws}`,
+      `${getPhaseLabel(this.dayNight.phase)}: ${seconds}с   Цикл: ${this.dayNight.cycle}\nРейтинг: ${this.score}   Рекорд: ${this.bestScore}\nОбъявления: ${this.collectedPosterCount}/${this.posters.length}   Свобода: ${paws}`,
     );
     this.updateObjectiveIndicator();
   }
@@ -703,7 +720,7 @@ export class GameScene extends Phaser.Scene {
       color: '#ffffff',
       backgroundColor: 'rgba(32, 23, 43, 0.82)',
       padding: { x: 14, y: 8 },
-    }).setOrigin(0.5).setDepth(210);
+    }).setOrigin(0.5).setDepth(210).setScrollFactor(0);
 
     this.tweens.add({
       targets: this.phaseNotice,
@@ -826,21 +843,24 @@ export class GameScene extends Phaser.Scene {
       nightsSurvived: this.survivedNightCount,
     });
     const resultDepth = 300;
-    this.add.rectangle(width / 2, height / 2, width, height, 0x20172b, 0.72).setDepth(resultDepth);
-    this.add.rectangle(width / 2, height / 2, 720, 470, 0xfff3dc).setStrokeStyle(5, 0x7c4d2b).setDepth(resultDepth + 1);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x20172b, 0.72).setDepth(resultDepth).setScrollFactor(0);
+    this.add.rectangle(width / 2, height / 2, Math.min(width - 32, 720), 470, 0xfff3dc)
+      .setStrokeStyle(5, 0x7c4d2b)
+      .setDepth(resultDepth + 1)
+      .setScrollFactor(0);
     this.add.text(width / 2, height / 2 - 175, 'Чешка вернулась домой', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '38px',
       color: '#4d2c1d',
       align: 'center',
-    }).setOrigin(0.5).setDepth(resultDepth + 2);
+    }).setOrigin(0.5).setDepth(resultDepth + 2).setScrollFactor(0);
     this.add.text(width / 2, height / 2 - 124, `${rank.title}\n${rank.description}`, {
       fontFamily: 'Arial, sans-serif',
       fontSize: '22px',
       color: '#6d4c9f',
       align: 'center',
       lineSpacing: 5,
-    }).setOrigin(0.5).setDepth(resultDepth + 2);
+    }).setOrigin(0.5).setDepth(resultDepth + 2).setScrollFactor(0);
     this.add.text(
       width / 2,
       height / 2 - 48,
@@ -852,7 +872,7 @@ export class GameScene extends Phaser.Scene {
         align: 'center',
         lineSpacing: 8,
       },
-    ).setOrigin(0.5).setDepth(resultDepth + 2);
+    ).setOrigin(0.5).setDepth(resultDepth + 2).setScrollFactor(0);
     this.add.text(
       width / 2,
       height / 2 + 92,
@@ -864,28 +884,30 @@ export class GameScene extends Phaser.Scene {
         align: 'center',
         lineSpacing: 6,
       },
-    ).setOrigin(0.5).setDepth(resultDepth + 2);
+    ).setOrigin(0.5).setDepth(resultDepth + 2).setScrollFactor(0);
 
     const restartButton = this.add.rectangle(width / 2 - 145, height / 2 + 194, 250, 52, 0x79b66a)
       .setStrokeStyle(3, 0x315a2c)
       .setDepth(resultDepth + 2)
+      .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
     this.add.text(width / 2 - 145, height / 2 + 194, 'Сбежать снова', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '22px',
       color: '#ffffff',
-    }).setOrigin(0.5).setDepth(resultDepth + 3);
+    }).setOrigin(0.5).setDepth(resultDepth + 3).setScrollFactor(0);
     restartButton.on('pointerdown', () => this.scene.restart());
 
     const shareButton = this.add.rectangle(width / 2 + 145, height / 2 + 194, 250, 52, 0x6d4c9f)
       .setStrokeStyle(3, 0x3b255d)
       .setDepth(resultDepth + 2)
+      .setScrollFactor(0)
       .setInteractive({ useHandCursor: true });
     this.add.text(width / 2 + 145, height / 2 + 194, 'Поделиться', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '22px',
       color: '#ffffff',
-    }).setOrigin(0.5).setDepth(resultDepth + 3);
+    }).setOrigin(0.5).setDepth(resultDepth + 3).setScrollFactor(0);
     shareButton.on('pointerdown', () => {
       shareGameResult({
         locationHref: window.location.href,

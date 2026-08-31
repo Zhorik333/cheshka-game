@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { getMovementBobFrame } from '../systems/ambientAnimation';
 import { CHESHKA_VISUAL_DESIGN } from '../systems/entityVisualDesign';
+import type { MovementBounds } from '../systems/viewport';
 import { distance, moveTowards, type Point } from '../utils/movement';
 
 const CAT_COLOR = CHESHKA_VISUAL_DESIGN.bodyColor;
@@ -20,13 +21,13 @@ export class Cat {
   private readonly speedPixelsPerSecond: number;
   private elapsedMs = 0;
 
-  constructor(scene: Phaser.Scene, start: Point, speedPixelsPerSecond = 220) {
+  constructor(scene: Phaser.Scene, start: Point, speedPixelsPerSecond = 220, bounds?: MovementBounds) {
     this.speedPixelsPerSecond = speedPixelsPerSecond;
     this.target = { ...start };
-    this.minX = 22;
-    this.maxX = scene.scale.width - 22;
-    this.minY = 22;
-    this.maxY = scene.scale.height - 22;
+    this.minX = bounds?.minX ?? 22;
+    this.maxX = bounds?.maxX ?? scene.scale.width - 22;
+    this.minY = bounds?.minY ?? 22;
+    this.maxY = bounds?.maxY ?? scene.scale.height - 22;
 
     const shadow = scene.add.ellipse(0, 16, 38, 16, 0x3b2a20, 0.18);
     const tail = scene.add.ellipse(-19, 8, 11, 30, CAT_COLOR).setStrokeStyle(3, CAT_OUTLINE);
@@ -130,5 +131,9 @@ export class Cat {
 
   get targetPosition(): Point {
     return { ...this.target };
+  }
+
+  get followTarget(): Phaser.GameObjects.Container {
+    return this.avatar;
   }
 }
