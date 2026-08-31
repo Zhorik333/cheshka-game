@@ -28,6 +28,7 @@ import { shareGameResult } from '../telegram/shareResult';
 import { createPosterStates } from '../systems/posterLayout';
 import { getResultRank } from '../systems/resultRank';
 import { createGameplayTapBlockers, isGameplayTap } from '../systems/tapTarget';
+import { getVirtualJoystickFrame, type VirtualJoystickConfig } from '../systems/virtualJoystick';
 import { distance, type Point } from '../utils/movement';
 
 const POSTER_COLLECTION_RADIUS = 34;
@@ -43,6 +44,16 @@ const DASH_CONFIG = {
   cooldownMs: 2_500,
 };
 const POSTER_COMBO_WINDOW_MS = 4_000;
+const JOYSTICK_CONFIG: VirtualJoystickConfig = {
+  maxRadius: 72,
+  deadZoneRadius: 9,
+};
+
+type ActiveJoystick = {
+  pointerId: number;
+  origin: Point;
+  current: Point;
+};
 
 type PosterSprite = {
   paper: Phaser.GameObjects.Rectangle;
@@ -80,6 +91,7 @@ export class GameScene extends Phaser.Scene {
   private dashCooldownText?: Phaser.GameObjects.Text;
   private dashState: DashState = createDashState(DASH_CONFIG);
   private catIsHidden = false;
+  private activeJoystick?: ActiveJoystick;
   private posterCombo: PosterComboState = createPosterComboState(POSTER_COMBO_WINDOW_MS);
   private catchState: CatchState = {
     catches: 0,
@@ -123,6 +135,7 @@ export class GameScene extends Phaser.Scene {
     this.dashCooldownFill = undefined;
     this.dashCooldownText = undefined;
     this.dashState = createDashState(DASH_CONFIG);
+    this.activeJoystick = undefined;
     this.posterCombo = createPosterComboState(POSTER_COMBO_WINDOW_MS);
     this.catchState = { catches: 0, maxCatches: 3, invulnerableUntilMs: 0, ended: false };
 
@@ -170,10 +183,30 @@ export class GameScene extends Phaser.Scene {
     const tapBlockers = createGameplayTapBlockers(width, height, import.meta.env.DEV);
     this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
       const tapPoint = { x: pointer.worldX, y: pointer.worldY };
-      if (!this.catchState.ended && isGameplayTap(tapPoint, tapBlockers)) {
-        this.cat?.setTarget(tapPoint);
+      if (this.catchState.ended || !isGameplayTap(tapPoint, tapBlockers)) {
+        return;
       }
+
+      this.activeJoystick = {
+        pointerId: pointer.id,
+        origin: tapPoint,
+        current: tapPoint,
+      };
+      this.updateJoystickMovement();
     });
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (!this.activeJoystick || pointer.id !== this.activeJoystick.pointerId) {
+        return;
+      }
+
+      this.activeJoystick = {
+        ...this.activeJoystick,
+        current: { x: pointer.worldX, y: pointer.worldY },
+      };
+      this.updateJoystickMovement();
+    });
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => this.stopJoystick(pointer));
+    this.input.on('pointerupoutside', (pointer: Phaser.Input.Pointer) => this.stopJoystick(pointer));
 
     if (import.meta.env.DEV) {
       this.input.keyboard?.on('keydown-N', () => this.fastForwardCurrentPhase());
@@ -183,7 +216,7 @@ export class GameScene extends Phaser.Scene {
 
     this.createDashButton(width, height);
 
-    this.add.text(width / 2, height - 28, 'Срывай объявления и не заходи в красные зоны людей ♪', {
+    this.add.text(width / 2, height - 28, 'Веди пальцем по экрану: невидимый джойстик управляет Чешкой ♪', {
       fontFamily: 'Arial, sans-serif',
       fontSize: '18px',
       color: '#4d2c1d',
@@ -207,6 +240,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
+    this.updateJoystickMovement();
     this.cat?.update(delta);
     this.updateDayNight(delta);
 
@@ -221,6 +255,32 @@ export class GameScene extends Phaser.Scene {
     this.checkHumanDetection(time);
     this.updateDashButton(time);
     this.updatePosterAnimations(time);
+  }
+
+  private updateJoystickMovement(): void {
+    if (!this.cat) {
+      return;
+    }
+
+    if (!this.activeJoystick || this.catchState.ended) {
+      this.cat.setMovementInput({ x: 0, y: 0 });
+      return;
+    }
+
+    const joystick = getVirtualJoystickFrame(this.activeJoystick.origin, this.activeJoystick.current, JOYSTICK_CONFIG);
+    this.cat.setMovementInput({
+      x: joystick.direction.x * joystick.strength,
+      y: joystick.direction.y * joystick.strength,
+    });
+  }
+
+  private stopJoystick(pointer: Phaser.Input.Pointer): void {
+    if (!this.activeJoystick || pointer.id !== this.activeJoystick.pointerId) {
+      return;
+    }
+
+    this.activeJoystick = undefined;
+    this.cat?.setMovementInput({ x: 0, y: 0 });
   }
 
   private updateHidingIndicator(showTransitionPopup: boolean): void {

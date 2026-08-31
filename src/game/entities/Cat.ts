@@ -8,9 +8,14 @@ const CAT_OUTLINE = CHESHKA_VISUAL_DESIGN.outlineColor;
 
 export class Cat {
   private target: Point;
+  private movementInput: Point = { x: 0, y: 0 };
   private readonly avatar: Phaser.GameObjects.Container;
   private readonly visual: Phaser.GameObjects.Container;
   private readonly label: Phaser.GameObjects.Text;
+  private readonly minX: number;
+  private readonly maxX: number;
+  private readonly minY: number;
+  private readonly maxY: number;
 
   private readonly speedPixelsPerSecond: number;
   private elapsedMs = 0;
@@ -18,6 +23,10 @@ export class Cat {
   constructor(scene: Phaser.Scene, start: Point, speedPixelsPerSecond = 220) {
     this.speedPixelsPerSecond = speedPixelsPerSecond;
     this.target = { ...start };
+    this.minX = 22;
+    this.maxX = scene.scale.width - 22;
+    this.minY = 22;
+    this.maxY = scene.scale.height - 22;
 
     const shadow = scene.add.ellipse(0, 16, 38, 16, 0x3b2a20, 0.18);
     const tail = scene.add.ellipse(-19, 8, 11, 30, CAT_COLOR).setStrokeStyle(3, CAT_OUTLINE);
@@ -63,10 +72,28 @@ export class Cat {
   }
 
   setTarget(target: Point): void {
+    this.movementInput = { x: 0, y: 0 };
     this.target = { ...target };
   }
 
+  setMovementInput(input: Point, lookAheadDistance = 160): void {
+    this.movementInput = { ...input };
+    const magnitude = Math.hypot(input.x, input.y);
+    const current = this.position;
+
+    if (magnitude <= 0.01) {
+      this.target = { ...current };
+      return;
+    }
+
+    this.target = {
+      x: current.x + (input.x / magnitude) * lookAheadDistance,
+      y: current.y + (input.y / magnitude) * lookAheadDistance,
+    };
+  }
+
   setPosition(position: Point): void {
+    this.movementInput = { x: 0, y: 0 };
     this.target = { ...position };
     this.avatar.setPosition(position.x, position.y);
     this.label.setPosition(position.x, position.y - 39);
@@ -80,12 +107,20 @@ export class Cat {
   update(deltaMs: number): void {
     this.elapsedMs += deltaMs;
     const current = this.position;
-    const moving = distance(current, this.target) > 1;
-    const next = moveTowards(current, this.target, (this.speedPixelsPerSecond * deltaMs) / 1000);
+    const inputMagnitude = Math.hypot(this.movementInput.x, this.movementInput.y);
+    const moving = inputMagnitude > 0.01 || distance(current, this.target) > 1;
+    const travelDistance = (this.speedPixelsPerSecond * deltaMs) / 1000;
+    const next = inputMagnitude > 0.01
+      ? {
+          x: Phaser.Math.Clamp(current.x + this.movementInput.x * travelDistance, this.minX, this.maxX),
+          y: Phaser.Math.Clamp(current.y + this.movementInput.y * travelDistance, this.minY, this.maxY),
+        }
+      : moveTowards(current, this.target, travelDistance);
     this.avatar.setPosition(next.x, next.y);
     const facingScaleX = this.target.x < next.x ? -1 : 1;
-    this.visual.setScale(facingScaleX, getMovementBobFrame(moving, this.elapsedMs).scaleY);
-    this.visual.setY(getMovementBobFrame(moving, this.elapsedMs).yOffset);
+    const bobFrame = getMovementBobFrame(moving, this.elapsedMs);
+    this.visual.setScale(facingScaleX, bobFrame.scaleY);
+    this.visual.setY(bobFrame.yOffset);
     this.label.setPosition(next.x, next.y - 39);
   }
 
