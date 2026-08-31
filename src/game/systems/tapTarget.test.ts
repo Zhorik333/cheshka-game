@@ -15,11 +15,12 @@ describe('tapTarget', () => {
     expect(isPointInsideTapBlocker({ x: 979, y: 628 }, blocker)).toBe(false);
   });
 
-  it('keeps normal playfield taps available', () => {
+  it('keeps normal playfield taps available while blocking HUD and action controls', () => {
     const blockers = createGameplayTapBlockers(1000, 720);
 
     expect(isGameplayTap({ x: 520, y: 360 }, blockers)).toBe(true);
     expect(isGameplayTap({ x: 120, y: 104 }, blockers)).toBe(false);
+    expect(isGameplayTap({ x: 918, y: 33 }, blockers)).toBe(false);
     expect(isGameplayTap({ x: 922, y: 628 }, blockers)).toBe(false);
     expect(isGameplayTap({ x: 520, y: 700 }, blockers)).toBe(false);
   });

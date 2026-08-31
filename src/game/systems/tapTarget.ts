@@ -36,6 +36,7 @@ export function isGameplayTap(point: Point, blockers: TapBlocker[]): boolean {
 export function createGameplayTapBlockers(width: number, height: number, includeDevFooter = false): TapBlocker[] {
   const blockers: TapBlocker[] = [
     { kind: 'rect', x: 0, y: 0, width: 780, height: 178 },
+    { kind: 'rect', x: width - 148, y: 12, width: 132, height: 42 },
     { kind: 'circle', center: { x: width - 78, y: height - 92 }, radius: 56 },
     { kind: 'rect', x: 0, y: height - 58, width, height: 58 },
   ];
