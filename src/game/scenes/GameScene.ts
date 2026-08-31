@@ -24,6 +24,7 @@ import { getPhaseObjective } from '../systems/phaseObjective';
 import { createPosterComboState, recordPosterCombo, type PosterComboState } from '../systems/posterCombo';
 import { collectNearbyPosters, type PosterState } from '../systems/posterCollection';
 import { getSoundCue, type SoundEventKind } from '../systems/soundDesign';
+import { getSoundToggleLabel, loadSoundEnabled, toggleSoundEnabled } from '../systems/soundSettings';
 import { configureTelegramBackButton, getTelegramBackButton } from '../telegram/backButton';
 import { shareGameResult } from '../telegram/shareResult';
 import { createPosterStates } from '../systems/posterLayout';
@@ -95,6 +96,9 @@ export class GameScene extends Phaser.Scene {
   private activeJoystick?: ActiveJoystick;
   private audioContext?: AudioContext;
   private audioUnlocked = false;
+  private soundEnabled = true;
+  private soundButton?: Phaser.GameObjects.Rectangle;
+  private soundButtonText?: Phaser.GameObjects.Text;
   private posterCombo: PosterComboState = createPosterComboState(POSTER_COMBO_WINDOW_MS);
   private catchState: CatchState = {
     catches: 0,
@@ -122,6 +126,7 @@ export class GameScene extends Phaser.Scene {
     this.survivedNightCount = 0;
     this.dayClearAwarded = false;
     this.bestScore = loadBestScore(window.localStorage);
+    this.soundEnabled = loadSoundEnabled(window.localStorage);
     this.catIsHidden = false;
     this.posters = [];
     this.posterSprites.clear();
@@ -137,6 +142,8 @@ export class GameScene extends Phaser.Scene {
     this.dashButton = undefined;
     this.dashCooldownFill = undefined;
     this.dashCooldownText = undefined;
+    this.soundButton = undefined;
+    this.soundButtonText = undefined;
     this.dashState = createDashState(DASH_CONFIG);
     this.activeJoystick = undefined;
     this.audioUnlocked = false;
@@ -220,6 +227,7 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-SPACE', () => this.tryDash(this.time.now));
 
     this.createDashButton(width, height);
+    this.createSoundToggle(width);
 
     this.add.text(width / 2, height - 28, 'Веди пальцем по экрану: невидимый джойстик управляет Чешкой ♪', {
       fontFamily: 'Arial, sans-serif',
@@ -429,6 +437,42 @@ export class GameScene extends Phaser.Scene {
     this.dashCooldownFill?.setVisible(!ready);
     this.dashCooldownFill?.setAlpha(0.25 + getDashCooldownRatio(this.dashState, timeMs) * 0.48);
     this.dashCooldownText?.setText(ready ? 'готов' : `${getDashCooldownSeconds(this.dashState, timeMs)}с`);
+  }
+
+  private createSoundToggle(width: number): void {
+    this.soundButton = this.add.rectangle(width - 82, 33, 132, 42, 0x4d2c1d, 0.84)
+      .setStrokeStyle(3, 0xfff3dc)
+      .setDepth(215)
+      .setInteractive({ useHandCursor: true });
+    this.soundButtonText = this.add.text(width - 82, 33, getSoundToggleLabel(this.soundEnabled), {
+      fontFamily: 'Arial, sans-serif',
+      fontSize: '15px',
+      color: '#ffffff',
+      align: 'center',
+    }).setOrigin(0.5).setDepth(216).setInteractive({ useHandCursor: true });
+
+    const toggle = () => this.toggleSound();
+    this.soundButton.on('pointerdown', toggle);
+    this.soundButtonText.on('pointerdown', toggle);
+    this.updateSoundToggle();
+  }
+
+  private toggleSound(): void {
+    this.soundEnabled = toggleSoundEnabled(window.localStorage, this.soundEnabled);
+    this.updateSoundToggle();
+
+    if (this.soundEnabled) {
+      this.playSound('phaseChange');
+      this.showPopup(this.scale.width - 82, 76, 'Звук включён ♪', '#4d2c1d');
+      return;
+    }
+
+    this.showPopup(this.scale.width - 82, 76, 'Звук выключен', '#4d2c1d');
+  }
+
+  private updateSoundToggle(): void {
+    this.soundButton?.setFillStyle(this.soundEnabled ? 0x4d2c1d : 0x8c7a70, this.soundEnabled ? 0.84 : 0.68);
+    this.soundButtonText?.setText(getSoundToggleLabel(this.soundEnabled));
   }
 
   private updateDayNight(deltaMs: number): void {
@@ -691,6 +735,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private playSound(kind: SoundEventKind): void {
+    if (!this.soundEnabled) {
+      return;
+    }
+
     this.unlockAudio();
 
     if (!this.audioContext || this.audioContext.state === 'closed') {
